@@ -18,13 +18,12 @@
 		<LI><A HREF="#cli_register_command">cli_register_command()</A></LI>
 		<LI><A HREF="#cli_unregister_command">cli_unregister_command()</A></LI>
 		<LI><A HREF="#cli_loop">cli_loop()</A></LI>
-		<LI><A HREF="#cli_set_auth_callback">cli_set_auth_callback()(char *, char *)</EM>)</A></LI>
+		<LI><A HREF="#cli_set_auth_callback">cli_set_auth_callback()</A></LI>
 		<LI><A HREF="#cli_allow_user">cli_allow_user()</A></LI>
 		<LI><A HREF="#cli_deny_user">cli_deny_user()</A></LI>
 		<LI><A HREF="#cli_set_banner">cli_set_banner()</A></LI>
+		<LI><A HREF="#cli_set_hostname">cli_set_hostname()</A></LI>
 		<LI><A HREF="#cli_regular">cli_regular()</A></LI>
-		<LI><A HREF="#cli_add_filter">cli_add_filter()</A></LI>
-		<LI><A HREF="#cli_clear_filter">cli_clear_filter()</A></LI>
 		<LI><A HREF="#cli_file">cli_file()</A></LI>
 		<LI><A HREF="#cli_print">cli_print()</A></LI>
 		<LI><A HREF="#cli_print_callback">cli_print_callback()</A></LI>
@@ -38,13 +37,13 @@
 
 <P>
 libcli provides a telnet command-line environment which can be embedded
-in other programs. This environment includes useful features such as
+in other programs.  This environment includes useful features such as
 automatic authentication, history, and command-line editing.
 </P>
 
 <P>
 This guide should show you everything you need to embed libcli into
-your program. If you have any corrections, suggestions or modifications,
+your program.  If you have any corrections, suggestions or modifications,
 please E-mail David Parrish &lt;david@dparrish.com&gt;.
 </P>
 
@@ -56,29 +55,33 @@ Two methods of authentcation are supported by libcli - internal and callback.
 
 <P>
 Internal authentication is based on a list of username / password
-combinations that are set up before <A HREF="#cli_loop()">cli_loop()</A>
-is called. This list is checked with strcasecmp() for the username and
-strcmp() for the password.
+combinations that are set up before <A HREF="#cli_loop">cli_loop()</A>
+is called.  Passwords may be clear text, MD5 encrypted, or DES
+encrypted (requires a <B>{crypt}</B> prefix to distinguish from clear
+text).
 </P>
 
 <P>
-Callback based authentication calls a callback with the username &amp;
+Callback based authentication calls a callback with the username and
 password that the user enters, and must return a <EM>CLI_OK</EM> or
-<EM>CLI_ERROR</EM>. This can be used for checking passwords against some
-other database, e.g. LDAP.
+<EM>CLI_ERROR</EM>.  This can be used for checking passwords against
+some other database such as LDAP.
 </P>
 
 <P>
-If neither <EM>cli_set_auth_callback</EM> or <EM>cli_allow_user</EM>
-have been called before <A HREF="#cli_loop()">cli_loop()</A>, then
-authentication will be disabled and the user will not be prompted for
-a username / password combination.
+If neither <A HREF="#cli_set_auth_callback">cli_set_auth_callback()</A>
+or <A HREF="#cli_allow_user">cli_allow_user()</A> have been called before
+<A HREF="#cli_loop">cli_loop()</A>, then authentication will be
+disabled and the user will not be prompted for a username / password
+combination.
 </P>
 
 <P>
-Authentication for the privileged state can also be defined by a static password
-or by a callback. Use the <EM>cli_set_enable_callback</EM> or
-<EM>cli_allow_enable</EM> functions to set the enable password.
+Authentication for the privileged state can also be defined by a
+static password or by a callback.  Use the
+<A HREF="#cli_set_enable_callback">cli_set_enable_callback()</A> or
+<A HREF="#cli_allow_enable">cli_allow_enable</A> functions to set the
+enable password.
 </P>
 
 <H2><A NAME="tutorial">3.0 Tutorial</A></H2>
@@ -92,6 +95,8 @@ This section will guide you through implementing libcli in a basic server.
 #include &lt;sys/types.h&gt;
 #include &lt;sys/socket.h&gt;
 #include &lt;arpa/inet.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;string.h&gt;
 #include &lt;libcli.h&gt;
 
 int main(int argc, char *argv[])
@@ -101,61 +106,64 @@ int main(int argc, char *argv[])
 	struct cli_def *cli;
 	int on = 1, x, s;
 
-	<FONT COLOR=blue>// Must be called first to setup data structures</FONT>
-	cli = cli_init();
+	<FONT COLOR=green>// Must be called first to setup data structures</FONT>
+	cli = <A HREF="#cli_init">cli_init</A>();
 
-	<FONT COLOR=blue>// Set the greeting</FONT>
-	cli_set_banner(cli, "Welcome to the CLI test program.");
+	<FONT COLOR=green>// Set the hostname (shown in the the prompt)</FONT>
+	<A HREF="#cli_set_hostname">cli_set_hostname</A>(cli, "test");
 
-	<FONT COLOR=blue>// Enable 2 username / password combinations</FONT>
-	cli_allow_user(cli, "fred", "nerk");
-	cli_allow_user(cli, "foo", "bar");
+	<FONT COLOR=green>// Set the greeting</FONT>
+	<A HREF="#cli_set_banner">cli_set_banner</A>(cli, "Welcome to the CLI test program.");
 
-	<FONT COLOR=blue>// Set up a few simple one-level commands</FONT>
-	cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
-	cli_register_command(cli, NULL, "simple", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
-	cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+	<FONT COLOR=green>// Enable 2 username / password combinations</FONT>
+	<A HREF="#cli_allow_user">cli_allow_user</A>(cli, "fred", "nerk");
+	<A HREF="#cli_allow_user">cli_allow_user</A>(cli, "foo", "bar");
 
-	<FONT COLOR=blue>// This command takes arguments, and requires privileged mode (enable)</FONT>
-	cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
+	<FONT COLOR=green>// Set up a few simple one-level commands</FONT>
+	<A HREF="#cli_register_command">cli_register_command</A>(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+	<A HREF="#cli_register_command">cli_register_command</A>(cli, NULL, "simple", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+	<A HREF="#cli_register_command">cli_register_command</A>(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-	<FONT COLOR=blue>// Set up 2 commands "show counters" and "show junk"</FONT>
-	c = cli_register_command(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
-	<FONT COLOR=blue>// Note how we store the previous command and use it as the parent for this one.</FONT>
-	cli_register_command(cli, c, "junk", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
-	<FONT COLOR=blue>// This one has some help text</FONT>
-	cli_register_command(cli, c, "counters", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the counters that the system uses");
+	<FONT COLOR=green>// This command takes arguments, and requires privileged mode (enable)</FONT>
+	<A HREF="#cli_register_command">cli_register_command</A>(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
 
-	<FONT COLOR=blue>// Create a socket</FONT>
+	<FONT COLOR=green>// Set up 2 commands "show counters" and "show junk"</FONT>
+	c = <A HREF="#cli_register_command">cli_register_command</A>(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+	<FONT COLOR=green>// Note how we store the previous command and use it as the parent for this one.</FONT>
+	<A HREF="#cli_register_command">cli_register_command</A>(cli, c, "junk", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+	<FONT COLOR=green>// This one has some help text</FONT>
+	<A HREF="#cli_register_command">cli_register_command</A>(cli, c, "counters", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the counters that the system uses");
+
+	<FONT COLOR=green>// Create a socket</FONT>
 	s = socket(AF_INET, SOCK_STREAM, 0);
 	setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &amp;on, sizeof(on));
 
-	<FONT COLOR=blue>// Listen on port 12345</FONT>
+	<FONT COLOR=green>// Listen on port 12345</FONT>
 	memset(&amp;servaddr, 0, sizeof(servaddr));
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_port = htons(12345);
 	bind(s, (struct sockaddr *)&amp;servaddr, sizeof(servaddr));
 
-	<FONT COLOR=blue>// Wait for a connection</FONT>
+	<FONT COLOR=green>// Wait for a connection</FONT>
 	listen(s, 50);
 
 	while ((x = accept(s, NULL, 0)))
 	{
-		<FONT COLOR=blue>// Pass the connection off to libcli</FONT>
-		cli_loop(cli, x, "cli&gt; ");
+		<FONT COLOR=green>// Pass the connection off to libcli</FONT>
+		<A HREF="#cli_loop">cli_loop</A>(cli, x);
 		close(x);
 	}
 
-	<FONT COLOR=blue>// Free data structures</FONT>
-	cli_done(cli);
+	<FONT COLOR=green>// Free data structures</FONT>
+	<A HREF="#cli_done">cli_done</A>(cli);
 
 	return 0;
 }
 </PRE>
 <P>
 This code snippet is all that's required to enable a libcli
-program. However it's not yet compilable because we haven't created the
+program.  However it's not yet compilable because we haven't created the
 callback functions.
 </P>
 
@@ -187,8 +195,7 @@ Make this program complete by adding the callback functions.
 <PRE>
 int cmd_test(struct cli_def *cli, char *command, char *argv[], int argc)
 {
-    int i;
-    cli_print(cli, "called %s with %s\r\n", __FUNCTION__, command);
+    <A HREF="#cli_print">cli_print</A>(cli, "called %s with %s\r\n", __FUNCTION__, command);
     return CLI_OK;
 }
 
@@ -196,30 +203,30 @@ int cmd_set(struct cli_def *cli, char *command, char *argv[], int argc)
 {
     if (argc &lt; 2)
     {
-	cli_print(cli, "Specify a variable to set\r\n");
+	<A HREF="#cli_print">cli_print</A>(cli, "Specify a variable to set\r\n");
 	return CLI_OK;
     }
-    cli_print(cli, "Setting %s to %s\r\n", argv[0], argv[1]);
+    <A HREF="#cli_print">cli_print</A>(cli, "Setting %s to %s\r\n", argv[0], argv[1]);
     return CLI_OK;
 }
 </PRE>
 
 <P>
-2 callback functions are defined here, <EM>cmd_test</EM> and
-<EM>cmd_set</EM>. <EM>cmd_test</EM> is called by many of the commands
-defined in the tutorial, although in reality you would usually use a
-callback for a single command.
+2 callback functions are defined here, <EM>cmd_test()</EM> and
+<EM>cmd_set()</EM>.  <EM>cmd_test()</EM> is called by many of the
+commands defined in the tutorial, although in reality you would
+usually use a callback for a single command.
 </P>
 
 <P>
-<EM>cmd_test</EM> simply echos the command entered back to the
-client. Note that it shows the full expanded command, so you can enter
+<EM>cmd_test()</EM> simply echos the command entered back to the
+client.  Note that it shows the full expanded command, so you can enter
 "<CODE>te</CODE>" at the prompt and it will print back "<CODE>called
 with test</CODE>".
 </P>
 
 <P>
-<EM>cmd_set</EM> handles the arguments given on the command line. This
+<EM>cmd_set</EM> handles the arguments given on the command line.  This
 allows you to use a single callback to handle lots of arguments like:
 <UL>
 <LI>set colour green</LI>
@@ -248,7 +255,7 @@ to see your work in action.
 <H3><A NAME="cli_init">4.1 cli_init()</A></H3>
 
 <P>
-This must be called before any other cli_<EM>xxx</EM> function. It sets
+This must be called before any other cli_<EM>xxx</EM> function.  It sets
 up the internal data structures used for command-line processing.
 </P>
 
@@ -261,28 +268,27 @@ other cli_<EM>xxx</EM> functions.
 
 <P>
 This is optional, but it's a good idea to call this when you are finished
-with libcli. This frees memory used by libcli.
+with libcli.  This frees memory used by libcli.
 </P>
 
 <H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *, char *, char **, int), int privilege, int mode, char *help</EM>)</A></H3>
 
 <P>
-Add a command to the internal command tree. Returns a <EM>struct
+Add a command to the internal command tree.  Returns a <EM>struct
 cli_command *</EM>, which you can pass as <EM>parent</EM> to another
-call to <EM>cli_register_command</EM>.
+call to <A HREF="#cli_register_command">cli_register_command()</A>.
 </P>
 
 <P>When the command has been entered by the user, <EM>callback</EM>
-is checked. If it is not NULL, then the callback is called with:</P>
+is checked.  If it is not NULL, then the callback is called with:</P>
 <OL>
-	<LI>struct cli_def * - the handle of the cli structure. This
-	must be passed to all cli functions, including
-	<A HREF="#cli_print">cli_print()</A>.</LI>
-	<LI>FILE * - the output stream</LI>
-	<LI>char * - the entire command which was entered. This is after command
+	<LI>struct cli_def * - the handle of the cli structure.  This
+	    must be passed to all cli functions, including
+	    <A HREF="#cli_print">cli_print()</A>.</LI>
+	<LI>char * - the entire command which was entered.  This is after command
 	expansion.</LI>
 	<LI>char ** - the list of arguments entered</LI>
-	<LI>char ** - the number of arguments entered</LI>
+	<LI>int - the number of arguments entered</LI>
 </OL>
 
 <P>The callback must return <EM>CLI_OK</EM> if the command was successful,
@@ -295,17 +301,17 @@ commands, otherwise it is a subcommand of <EM>parent</EM></P>
 
 <P>
 <EM>privilege</EM> should be set to either PRIVILEGE_PRIVILEGED or
-PRIVILEGE_UNPRIVILEGED. If set to PRIVILEGE_PRIVILEGED then the user must have
+PRIVILEGE_UNPRIVILEGED.  If set to PRIVILEGE_PRIVILEGED then the user must have
 entered <EM>enable</EM> before running this command.
 </P>
 
 <P>
 <EM>mode</EM> should be set to MODE_EXEC for no configuration mode, MODE_CONFIG
-for generic configuration commands, or your own config level. The user can enter
+for generic configuration commands, or your own config level.  The user can enter
 the generic configuration level by entering <EM>configure terminal</EM>, and can
-return to MODE_EXEC by entering <EM>exit</EM> or <EM>CTRL-Z</EM>. You can define
+return to MODE_EXEC by entering <EM>exit</EM> or <EM>CTRL-Z</EM>.  You can define
 commands to enter your own configuration levels, which should call the
-<A HREF="#cli_set_configmode">cli_set_configmode</A> function.
+<A HREF="#cli_set_configmode">cli_set_configmode()</A> function.
 </P>
 
 <P>If <EM>help</EM> is provided, it is given to the user when the use
@@ -314,21 +320,20 @@ the <EM>help</EM> command or press <B>?</B>.</P>
 <H3><A NAME="cli_unregister_command">4.4 cli_unregister_command(<EM>struct cli_def *cli, char *command</EM>)</A></H3>
 
 <P>
-Remove a command <EM>command</EM> and all children. There is not provision
+Remove a command <EM>command</EM> and all children.  There is not provision
 yet for removing commands at lower than the top level.
 </P>
 
-<H3><A NAME="cli_loop">4.5 cli_loop(<EM>struct cli_def *cli, int sockfd, char *prompt</EM>)</A></H3>
+<H3><A NAME="cli_loop">4.5 cli_loop(<EM>struct cli_def *cli, int sockfd)</A></H3>
 
 <P>
-The main loop of the command-line environment. This must be called with
-the FD of a socket open for bi-directional communication (<EM>sockfd</EM>)
-and the string that the user will be prompted with.
+The main loop of the command-line environment.  This must be called with
+the FD of a socket open for bi-directional communication (<EM>sockfd</EM>).
 </P>
 
 <P>
-<A HREF="#cli_loop()">cli_loop()</A> handles the telnet negotiation
-and authentication. It returns only when the connection is finished,
+<A HREF="#cli_loop">cli_loop()</A> handles the telnet negotiation
+and authentication.  It returns only when the connection is finished,
 either by a server or client disconnect.
 </P>
 
@@ -343,7 +348,7 @@ Enables or disables callback based authentication.
 </P>
 
 <P>If <EM>auth_callback</EM> is not NULL, then authentication will be
-required on connection. <EM>auth_callback</EM> will be called with the
+required on connection.  <EM>auth_callback</EM> will be called with the
 <EM>username</EM> and <EM>password</EM> that the user enters.  </P>
 
 <P><EM>auth_callback</EM> must return <EM>CLI_OK</EM> if authentication
@@ -367,24 +372,30 @@ Removes <EM>username/password</EM> from the list of allowed users.
 </P>
 
 <P> If this is the last combination in the list, then internal
-authentication will be disabled.  </P>
+authentication will be disabled.</P>
 
 <H3><A NAME="cli_set_banner">4.9 cli_set_banner(<EM>struct cli_def *cli, char *banner</EM>)</A></H3>
 
 <P>
 Sets the greeting that clients will be presented with when they
-connect. This may be a security warning for example.
+connect.  This may be a security warning for example.
 </P>
 
 <P>
-If <EM>banner</EM> is NULL, then no banner will be presented (the default).
+If this function is not called or called with a NULL argument, no banner will be presented.
 </P>
 
-<H3><A NAME="cli_regular">4.10 cli_regular(<EM>struct cli_def *cli, int(*callback)(struct cli_def *)</EM>)</A></H3>
+<H3><A NAME="cli_set_hostname">4.10 cli_set_hostname(<EM>struct cli_def *cli, char *hostname</EM>)</A></H3>
+
+<P>
+Sets the hostname to be displayed as the first part of the prompt.
+</P>
+
+<H3><A NAME="cli_regular">4.11 cli_regular(<EM>struct cli_def *cli, int(*callback)(struct cli_def *)</EM>)</A></H3>
 
 <P>
 Adds a callback function which will be called every second that a user
-is connected to the cli. This can be used for regular processing such
+is connected to the cli.  This can be used for regular processing such
 as debugging, time counting or implementing idle timeouts.
 </P>
 
@@ -397,53 +408,15 @@ If the callback function does not return CLI_OK, then the user will
 be disconnected.
 </P>
 
-<H3><A NAME="cli_add_filter">4.11 cli_add_filter(<EM>struct cli_def *cli, int(*filter)(struct cli_def *, char *, char **, int), char *params[], int num_params</EM>)</A></H3>
-
-<P>
-This will place a custom filter on all output generated by <A
-HREF="#cli_print()">cli_print()</A>. This will erase any existing filters,
-so it is not possible to have multiple concurrent filters applied.
-</P>
-
-<P>
-The <EM>filter</EM> parameter is a callback function that takes the cli
-handle, the text to be filtered, an array of strings which the filter
-should use, and the size of that array.
-</P>
-
-<P>
-The <EM>filter</EM> callback will only ever be called by the <A
-HREF="#cli_print()">cli_print()</A> function when output should be
-generated. It should return CLI_OK if the output should be displayed,
-or CLI_ERROR if the output should be supressed.
-</P>
-
-<P>
-If required, the callback can use the <EM>filter_data</EM> for it's
-internal use.
-</P>
-
-<P>
-<B>WARNING:</B> Any filter you specify will be cleared if the user
-requests a built-in filter, such as <EM>inc</EM>, <EM>begin</EM>
-or <EM>between</EM>.
-</P>
-
-<H3><A NAME="cli_clear_filter">4.12 cli_clear_filter(<EM>struct cli_def *cli</EM>)</A></H3>
-
-<P>
-This will clear any filters that are currently being applied to output.
-</P>
-
-<H3><A NAME="cli_file">4.13 cli_file(<EM>struct cli_def *cli, FILE *f, int privilege</EM>)</A></H3>
+<H3><A NAME="cli_file">4.12 cli_file(<EM>struct cli_def *cli, FILE *f, int privilege, int mode</EM>)</A></H3>
 
 <P>
 This reads and processes every line read from <EM>f</EM> as if it were
-entered at the console. The privilege level will be set to <EM>privilege</EM>
-first.
+entered at the console.  The privilege level will be set to <EM>privilege</EM>
+and mode set to <EM>mode</EM> during the processing of the file.
 </P>
 
-<H3><A NAME="cli_print">4.14 cli_print(<EM>struct cli_def *cli, char *format, ...</EM>)</A></H3>
+<H3><A NAME="cli_print">4.13 cli_print(<EM>struct cli_def *cli, char *format, ...</EM>)</A></H3>
 
 <P>
 This function should be called for any output generated by a command
@@ -461,13 +434,13 @@ to the <A HREF="#cli_print">cli_print_callback()</A> if one has been
 specified.
 </P>
 
-<H3><A NAME="cli_print_callback">4.15 cli_print_callback(<EM>struct cli_def *cli, void (*callback)(struct cli_def *, char *)</EM>)</A></H3>
+<H3><A NAME="cli_print_callback">4.14 cli_print_callback(<EM>struct cli_def *cli, void (*callback)(struct cli_def *, char *)</EM>)</A></H3>
 
 <P>
 Whenever <A HREF="#cli_print">cli_print()</A> is called from within
-a callback, the output generally goes to the user. If you specify a
+a callback, the output generally goes to the user.  If you specify a
 callback using this function, then the output will be sent to that
-callback. The function will be called once for each line, and it will
+callback.  The function will be called once for each line, and it will
 be passed a single null-terminated string, without any newline characters.
 </P>
 
@@ -476,15 +449,15 @@ Specifying NULL as the callback parameter will make libcli use the
 default <A HREF="#cli_print">cli_print()</A> function.
 </P>
 
-<H3><A NAME="cli_set_enable_callback">4.16 cli_set_enable_callback(<EM>struct cli_def *cli, void (*callback)(struct cli_def *, char *)</EM>)</A></H3>
+<H3><A NAME="cli_set_enable_callback">4.15 cli_set_enable_callback(<EM>struct cli_def *cli, void (*callback)(struct cli_def *, char *)</EM>)</A></H3>
 
 <P>
 Just like <A HREF="#cli_set_auth_callback">cli_set_auth_callback</A> this takes a pointer to a callback
-function to authorize privileged access. However this callback only takes a
+function to authorize privileged access.  However this callback only takes a
 single string - the password.
 </P>
 
-<H3><A NAME="cli_allow_enable">4.17 cli_allow_enable(<EM>struct cli_def *cli, char *password</EM>)</A></H3>
+<H3><A NAME="cli_allow_enable">4.16 cli_allow_enable(<EM>struct cli_def *cli, char *password</EM>)</A></H3>
 
 <P>
 This will allow a static password to be used for the <EM>enable</EM> command.
@@ -495,16 +468,17 @@ This static password will be checked before running any enable callbacks.
 Set this to NULL to not have a static enable password.
 </P>
 
-<H3><A NAME="cli_set_configmode">4.18 cli_set_configmode(<EM>struct cli_def *cli, int mode, char *string</EM>)</A></H3>
+<H3><A NAME="cli_set_configmode">4.17 cli_set_configmode(<EM>struct cli_def *cli, int mode, char *string</EM>)</A></H3>
 
 <P>
-This will set the configuration mode. Once set, commands will be restricted to
+This will set the configuration mode.  Once set, commands will be restricted to
 only ones in the selected configuration mode, plus any set to MODE_ANY.
+The previous mode value is returned.
 </P>
 
 <P>
 The string passed will be used to build the prompt in the set configuration
-mode. e.g. if you set the string <B>test</B>, the prompt will become:
+mode.  e.g. if you set the string <B>test</B>, the prompt will become:
 <PRE>
 hostname(config-test)#
 </PRE>
