@@ -7,8 +7,9 @@
 #include <malloc.h>
 #include <string.h>
 #include <ctype.h>
-#include "libcli.h"
 #include <unistd.h>
+#include <regex.h>
+#include "libcli.h"
 // vim:sw=8 ts=8
 
 enum cli_states
@@ -28,10 +29,12 @@ struct unp
 };
 
 int cli_run_command(struct cli_def *cli, char *command);
-int cli_filter_inc(struct cli_def *cli, char *string, char *params[], int num_params);
-int cli_filter_begin(struct cli_def *cli, char *string, char *params[], int num_params);
-int cli_filter_between(struct cli_def *cli, char *string, char *params[], int num_params);
-int cli_filter_count(struct cli_def *cli, char *string, char *params[], int num_params);
+int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
+int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
+int cli_count_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
+int cli_match_filter(struct cli_def *cli, char *string, void *data);
+int cli_range_filter(struct cli_def *cli, char *string, void *data);
+int cli_count_filter(struct cli_def *cli, char *string, void *data);
 
 char *cli_command_name(struct cli_def *cli, struct cli_command *command)
 {
@@ -135,7 +138,7 @@ int cli_set_privilege(struct cli_def *cli, int privilege)
 	cli->privilege = privilege;
 
 	if (privilege != old)
-		cli_set_promptchar(cli, privilege == PRIVILEGE_PRIVILEGED ? "#" : ">");
+		cli_set_promptchar(cli, privilege == PRIVILEGE_PRIVILEGED ? "# " : "> ");
 
 	return old;
 }
@@ -165,7 +168,7 @@ int cli_set_configmode(struct cli_def *cli, int mode, char *config_desc)
 		else if (config_desc && *config_desc)
 		{
 			char string[64];
-			snprintf(string, 64, "(config-%s)", config_desc);
+			snprintf(string, sizeof(string), "(config-%s)", config_desc);
 			cli_set_modestring(cli, string);
 		}
 		else
@@ -401,30 +404,6 @@ int cli_done(struct cli_def *cli)
 	return CLI_OK;
 }
 
-char *cli_trim_leading(char *value)
-{
-		char *p;
-
-		for (p = value; *p; p++)
-				if (*p > 32 && *p < 127)
-						break;
-
-		return p;
-}
-
-char *cli_trim_trailing(char *value)
-{
-		int i;
-
-		for (i = strlen(value) - 1; i > 0; i--)
-		{
-				if (value[i] > 32 && value[i] < 127) break;
-				value[i] = 0;
-		}
-
-		return value;
-}
-
 int cli_add_history(struct cli_def *cli, char *cmd)
 {
 	int i;
@@ -446,70 +425,63 @@ int cli_add_history(struct cli_def *cli, char *cmd)
 
 int cli_parse_line(char *line, char *words[], int max_words)
 {
-		int word_counter = 0, index;
-		char *p = line;
-		char *word_start = NULL;
-		char quotes = 0;
-		int quotes_level = 0;
+	int nwords = 0;
+	char *p = line;
+	char *word_start = line;
+	int inquote = 0;
 
-		while (word_counter < max_words)
+	while (nwords < max_words - 1)
+	{
+		if (!*p || *p == inquote || (word_start && !inquote && (isspace(*p) || *p == '|')))
 		{
-				if (*p == '\n' || *p == '\r')
-						return word_counter;
-				if (*p == ' ' || *p == '\t' || *p == 0)
-				{
-						if (word_start && !quotes)
-						{
-								char *lastchar;
-								words[word_counter] = (char *)calloc((p - word_start) + 1, 1);
-								memcpy(words[word_counter], word_start, p - word_start);
+			if (word_start)
+			{
+				int len = p - word_start;
 
-								// Chop trailing quote
-								lastchar = words[word_counter] + strlen(words[word_counter]) - 1;
-								if (*lastchar == '"') *lastchar = 0;
+				memcpy(words[nwords] = malloc(len + 1), word_start, len);
+				words[nwords++][len] = 0;
+			}
 
-								word_start = NULL;
-								word_counter++;
-						}
-						if (*p == 0)
-								break;
-						p++;
-						continue;
-				}
-				if (word_start == NULL)
-						word_start = p;
+			if (!*p)
+				break;
 
-				if ((*p == '"' || *p == '(' || *p == '[') && quotes_level == 0)
-				{
-						quotes = *p;
-						quotes_level++;
-						if (p == word_start) word_start++;
-						p++;
-						continue;
-				}
+			if (inquote)
+				p++; // skip over trailing quote
 
-				if ((*p == '"' && quotes == '"') || (*p == ')' && quotes == '(') || (*p == ']' && quotes == '['))
-				{
-						quotes_level--;
-						if (quotes_level == 0)
-								quotes = 0;
-						p++;
-						continue;
-				}
-
-				p++;
+			inquote = 0;
+			word_start = 0;
 		}
-		for (index = word_counter; index < max_words; index++)
+		else if (*p == '"' || *p == '\'')
 		{
-				words[index] = NULL;
+		    	inquote = *p++;
+			word_start = p;
 		}
+		else
+		{
+			if (!word_start)
+			{
+				if (*p == '|')
+				{
+				    	words[nwords++] = strdup("|");
+				}
+				else if (!isspace(*p))
+					word_start = p;
+			}
 
-		return word_counter;
+			p++;
+		}
+	}
+
+	return nwords;
 }
 
-int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_words, char *words[], int start_word, int filter_words, char *filter[])
+int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_words, char *words[], int start_word, int filters[])
 {
 	struct cli_command *c;
+	int c_words = num_words;
+
+	if (filters[0])
+		c_words = filters[0];
 
 	// Deal with ? for help
 	if (!words[start_word]) { return CLI_ERROR; }
@@ -520,9 +492,7 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 		for (c = commands; c; c = c->next)
 		{
 			if (strncasecmp(c->command, words[start_word], l) == 0 && (c->callback || c->children) && cli->privilege >= c->privilege && (c->mode == cli->mode || c->mode == MODE_ANY))
-			{
-				fprintf(cli->client, "  %-20s %s\r\n", c->command, c->help ? : "");
-			}
+				cli_print(cli, "  %-20s %s", c->command, c->help ? : "");
 		}
 
 		return CLI_OK;
@@ -532,7 +502,9 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 	{
 		if (strncasecmp(c->command, words[start_word], c->unique_len) == 0 && strncasecmp(c->command, words[start_word], strlen(words[start_word])) == 0 && cli->privilege >= c->privilege && (c->mode == cli->mode || c->mode == MODE_ANY))
 		{
-			int rc;
+			int rc = CLI_OK;
+			int f;
+			struct cli_filter **filt = &cli->filters;
 
 			// Found a word!
 			if (!c->children)
@@ -540,76 +512,159 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 				// Last word
 				if (!c->callback)
 				{
-					fprintf(cli->client, "No callback for \"%s\"\r\n", cli_command_name(cli, c));
+					cli_print(cli, "No callback for \"%s\"", cli_command_name(cli, c));
 					return CLI_ERROR;
 				}
 			}
 			else
 			{
-				if (start_word == num_words)
+				if (start_word == c_words - 1)
 				{
-					fprintf(cli->client, "Incomplete command\r\n");
+					cli_print(cli, "Incomplete command");
 					return CLI_ERROR;
 				}
-				return cli_find_command(cli, c->children, num_words, words, start_word + 1, filter_words, filter);
+				return cli_find_command(cli, c->children, num_words, words, start_word + 1, filters);
 			}
 
 			if (!c->callback)
 			{
-				fprintf(cli->client, "Internal server error processing \"%s\"\r\n", cli_command_name(cli, c));
+				cli_print(cli, "Internal server error processing \"%s\"", cli_command_name(cli, c));
 				return CLI_ERROR;
 			}
-			if (filter_words)
+
+			for (f = 0; rc == CLI_OK && filters[f]; f++)
 			{
-				if (strcasecmp(filter[0], "inc") == 0 || strcasecmp(filter[0], "grep") == 0)
-					cli_add_filter(cli, cli_filter_inc, filter, filter_words);
-				else if (strcasecmp(filter[0], "begin") == 0)
-					cli_add_filter(cli, cli_filter_begin, &filter[1], filter_words - 1);
-				else if (strcasecmp(filter[0], "between") == 0)
-					cli_add_filter(cli, cli_filter_between, &filter[1], filter_words - 1);
-				else if (strcasecmp(filter[0], "count") == 0)
-					cli_add_filter(cli, cli_filter_count, &filter[1], filter_words - 1);
+				int n = num_words;
+				char **argv;
+				int argc;
+				int len;
+
+				if (filters[f+1])
+					n = filters[f+1];
+
+				if (filters[f] == n - 1)
+				{
+					cli_print(cli, "Missing filter");
+					return CLI_ERROR;
+				}
+
+				argv = words + filters[f] + 1;
+				argc = n - (filters[f] + 1);
+				len = strlen(argv[0]);
+				if (argv[argc-1][strlen(argv[argc-1])-1] == '?')
+				{
+				    	if (argc == 1)
+					{
+						cli_print(cli, "  %-20s %s", "begin",   "Begin with lines that match");
+						cli_print(cli, "  %-20s %s", "between", "Between lines that match");
+						cli_print(cli, "  %-20s %s", "count",   "Count of lines");
+						cli_print(cli, "  %-20s %s", "exclude", "Exclude lines that match");
+						cli_print(cli, "  %-20s %s", "include", "Include lines that match");
+						cli_print(cli, "  %-20s %s", "grep",    "Include lines that match regex (options: -v, -i, -e)");
+						cli_print(cli, "  %-20s %s", "egrep",   "Include lines that match extended regex");
+					}
+					else
+					{
+						if (argv[0][0] != 'c') // count
+							cli_print(cli, "  WORD");
+
+						if (argc > 2 || argv[0][0] == 'c') // count
+							cli_print(cli, "  <cr>");
+					}
+
+					return CLI_OK;
+				}
+
+				if (argv[0][0] == 'b' && len < 3) // [beg]in, [bet]ween
+				{
+					cli_print(cli, "Ambiguous filter \"%s\" (begin, between)", argv[0]);
+					return CLI_ERROR;
+				}
+
+				if (argv[0][0] == 'e' && len < 2) // [eg]rep, [ex]clude
+				{
+					cli_print(cli, "Ambiguous filter \"%s\" (egrep, exclude)", argv[0]);
+					return CLI_ERROR;
+				}
+
+				*filt = calloc(sizeof(struct cli_filter), 1);
+
+				if (!strncmp("include", argv[0], len) ||
+				    !strncmp("exclude", argv[0], len) ||
+				    !strncmp("grep", argv[0], len) ||
+				    !strncmp("egrep", argv[0], len))
+					rc = cli_match_filter_init(cli, argc, argv, *filt);
+				else if (!strncmp("begin", argv[0], len) ||
+					 !strncmp("between", argv[0], len))
+					rc = cli_range_filter_init(cli, argc, argv, *filt);
+				else if (!strncmp("count", argv[0], len))
+					rc = cli_count_filter_init(cli, argc, argv, *filt);
+				else
+				{
+					cli_print(cli, "Invalid filter \"%s\"", argv[0]);
+					rc = CLI_ERROR;
+				}
+
+				if (rc == CLI_OK)
+				{
+				    	filt = &(*filt)->next;
+				}
+				else
+				{
+					free(*filt);
+					*filt = 0;
+				}
 			}
-			rc = c->callback(cli, cli_command_name(cli, c), words + start_word + 1, num_words - start_word - 1);
-			if (filter_words)
+
+			if (rc == CLI_OK)
+				rc = c->callback(cli, cli_command_name(cli, c), words + start_word + 1, c_words - start_word - 1);
+
+			while (cli->filters)
 			{
-				cli_clear_filter(cli);
+				struct cli_filter *filt = cli->filters;
+
+				// call one last time to clean up
+				filt->filter(cli, NULL, filt->data);
+				cli->filters = filt->next;
+				free(filt);
 			}
+
 			return rc;
 		}
 	}
-	fprintf(cli->client, "Invalid %s \"%s\"\r\n", commands->parent ? "argument" : "command", words[start_word]);
+
+	cli_print(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", words[start_word]);
 	return CLI_ERROR;
 }
 
 int cli_run_command(struct cli_def *cli, char *command)
 {
-	int num_words, r, i;
+	int num_words, r, i, f;
 	char *words[128] = {0};
-	char *filter[128] = {0};
-	int filter_words = 0;
-	char *p;
+	int filters[128] = {0};
 
 	if (!command) return CLI_ERROR;
-	command = cli_trim_trailing(cli_trim_leading(command));
+	while (isspace(*command))
+		command++;
+
 	if (!*command) return CLI_OK;
 
-	if ((p = strchr(command, '|')))
+	num_words = cli_parse_line(command, words, sizeof(words)/sizeof(words[0]));
+	for (i = f = 0; i < num_words && f < sizeof(filters)/sizeof(filters[0])-1; i++)
 	{
-		*p++ = 0;
-		command = cli_trim_trailing(command);
-		p = cli_trim_leading(p);
-		filter_words = cli_parse_line(p, filter, 128);
+		if (words[i][0] == '|')
+			filters[f++] = i;
 	}
 
-	num_words = cli_parse_line(command, words, 128);
-	if (!num_words) return CLI_ERROR;
+	filters[f] = 0;
 
-	r = cli_find_command(cli, cli->commands, num_words, words, 0, filter_words, filter);
+	if (num_words)
+		r = cli_find_command(cli, cli->commands, num_words, words, 0, filters);
+	else
+		r = CLI_ERROR;
+
 	for (i = 0; i < num_words; i++)
 		free(words[i]);
-	for (i = 0; i < filter_words; i++)
-		free(filter[i]);
 
 	if (r == CLI_QUIT)
 		return r;
@@ -663,7 +718,20 @@ static int pass_matches(char *pass, char *try)
 
 #define CTRL(c) (c - '@')
 
-int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
+static int show_prompt(struct cli_def *cli, int sockfd)
+{
+	int len = 0;
+
+	if (cli->hostname)
+		len += write(sockfd, cli->hostname, strlen(cli->hostname));
+
+	if (cli->modestring)
+		len += write(sockfd, cli->modestring, strlen(cli->modestring));
+
+	return len + write(sockfd, cli->promptchar, strlen(cli->promptchar));
+}
+
+int cli_loop(struct cli_def *cli, int sockfd)
 {
 	int n;
 	unsigned char c;
@@ -687,7 +755,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	cli->client = fdopen(sockfd, "w+");
 	setbuf(cli->client, NULL);
 	if (cli->banner)
-		fprintf(cli->client, "%s\r\n", cli->banner);
+		cli_print(cli, "%s", cli->banner);
 
 	// Start off in unprivileged mode
 	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -701,7 +769,6 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		signed int in_history = 0;
 		int lastchar = 0;
 		struct timeval tm;
-		char cliprompt[64];
 
 		cli->showprompt = 1;
 
@@ -742,16 +809,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 						break;
 					case STATE_NORMAL:
 					case STATE_ENABLE:
-						if (cli->modestring)
-							snprintf(cliprompt, 64, "%s%s%s ",
-								cli->hostname ? cli->hostname : "",
-								cli->modestring, cli->promptchar);
-						else
-							snprintf(cliprompt, 64, "%s%s ",
-								cli->hostname ? cli->hostname : "",
-								cli->promptchar);
-
-						write(sockfd, cliprompt, strlen(cliprompt));
+						show_prompt(cli, sockfd);
 						write(sockfd, cmd, l);
 						if (cursor < l)
 						{
@@ -936,12 +994,9 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			if (c == CTRL('L'))
 			{
 				int i;
-				int totallen = l + strlen(prompt);
 				int cursorback = l - cursor;
-				for (i = 0; i < totallen; i++) write(sockfd, "\b", 1);
-				for (i = 0; i < totallen; i++) write(sockfd, " ", 1);
-				for (i = 0; i < totallen; i++) write(sockfd, "\b", 1);
-				write(sockfd, prompt, strlen(prompt));
+				write(sockfd, "\r\n", 2);
+				show_prompt(cli, sockfd);
 				write(sockfd, cmd, l);
 				for (i = 0; i < cursorback; i++) write(sockfd, "\b", 1);
 				continue;
@@ -1112,7 +1167,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 				if (cursor)
 				{
 					write(sockfd, "\r", 1);
-					write(sockfd, prompt, strlen(prompt));
+					show_prompt(cli, sockfd);
 					cursor = 0;
 				}
 
@@ -1231,12 +1286,12 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 
 			if (allowed)
 			{
-				fprintf(cli->client, "\r\n");
+				cli_print(cli, "");
 				cli->state = STATE_NORMAL;
 			}
 			else
 			{
-				fprintf(cli->client, "\r\nAccess denied\r\n");
+				cli_print(cli, "\n\nAccess denied");
 				free(username); username = NULL;
 				free(password); password = NULL;
 				cli->state = STATE_LOGIN;
@@ -1267,7 +1322,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			}
 			else
 			{
-				fprintf(cli->client, "\r\nAccess denied\r\n");
+				cli_print(cli, "\n\nAccess denied");
 				cli->state = STATE_NORMAL;
 			}
 		}
@@ -1362,144 +1417,297 @@ void cli_print(struct cli_def *cli, char *format, ...)
 	p = buffer;
 	do {
 		char *next = strchr(p, '\n');
+		struct cli_filter *f = cli->filters;
+		int print = 1;
+
 		if (next)
 			*next++ = 0;
 
-		if (!cli->filter || cli->filter(cli, p, cli->filter_param_s, cli->filter_param_i) == CLI_OK)
+		while (print && f)
+		{
+			print = (f->filter(cli, p, f->data) == CLI_OK);
+			f = f->next;
+		}
+
+		if (print)
 		{
 			if (cli->print_callback)
 				cli->print_callback(cli, p);
-			else
-				if (cli->client) fprintf(cli->client, "%s\r\n", p);
+			else if (cli->client)
+				fprintf(cli->client, "%s\r\n", p);
 		}
 
 		p = next;
 	} while (p);
 }
 
-void cli_add_filter(struct cli_def *cli, int (*filter)(struct cli_def *, char *, char **, int), char *params[], int num_params)
+static char *join_words(int argc, char **argv)
 {
-	cli->filter = filter;
-	cli->filter_param_s = params;
-	cli->filter_param_i = num_params;
-	cli->filter_data = NULL;
-}
-
-void cli_clear_filter(struct cli_def *cli)
-{
-	// Call the filter one last time with NULL so it can clean up
-	if (cli->filter) cli->filter(cli, NULL, cli->filter_param_s, cli->filter_param_i);
-	cli->filter = NULL;
-	cli->filter_param_s = NULL;
-	cli->filter_param_i = 0;
-	cli->filter_data = NULL;
-}
-
-int cli_filter_inc(struct cli_def *cli, char *string, char *params[], int num_params)
-{
+	char *p;
+	int len = 0;
 	int i;
 
-	// Don't use this unless something is specified
-	if (num_params < 1)
-		return CLI_OK;
-	if (!string)
-		return CLI_OK;
-
-	for (i = 1; i < num_params; i++)
+	for (i = 0; i < argc; i++)
 	{
-		if (strstr(string, params[i]) != NULL)
-		{
-			return CLI_OK;
-		}
+		if (i)
+			len += 1;
+
+		len += strlen(argv[i]);
 	}
 
-	return CLI_ERROR;
+	p = malloc(len + 1);
+	p[0] = 0;
+
+	for (i = 0; i < argc; i++)
+	{
+		if (i)
+			strcat(p, " ");
+
+		strcat(p, argv[i]);
+	}
+
+	return p;
 }
 
-int cli_filter_begin(struct cli_def *cli, char *string, char *params[], int num_params)
+struct cli_match_filter_state {
+	int flags;
+#define MATCH_REGEX		1
+#define MATCH_INVERT		2
+	union {
+		char *string;
+		regex_t re;
+	} match;
+};
+
+int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt)
 {
-	static int started;
+	struct cli_match_filter_state *state;
+	int rflags;
+	int i;
+	char *p;
 
-	if (!cli->filter_data)
+	if (argc < 2)
 	{
-		started = 0;
-		cli->filter_data = &started;
+		if (cli->client)
+			fprintf(cli->client, "Match filter requires an argument\r\n");
+
+		return CLI_ERROR;
 	}
 
-	if (started)
-		return CLI_OK;
-	if (!string)
-		return CLI_OK;
+	filt->filter = cli_match_filter;
+	filt->data = state = calloc(sizeof(struct cli_match_filter_state), 1);
 
-	// Don't use this unless something is specified
-	if (num_params != 1)
-		return CLI_OK;
-
-	if (strstr(string, params[0]) != NULL)
+	if (argv[0][0] == 'i' || // include/exclude
+	    (argv[0][0] == 'e' && argv[0][1] == 'x'))
 	{
-		started = 1;
+		if (argv[0][0] == 'e')
+			state->flags = MATCH_INVERT;
+
+		state->match.string = join_words(argc-1, argv+1);
 		return CLI_OK;
 	}
 
-	return CLI_ERROR;
+	state->flags = MATCH_REGEX;
+
+	// grep/egrep
+	rflags = REG_NOSUB;
+	if (argv[0][0] == 'e') // egrep
+		rflags |= REG_EXTENDED;
+
+	i = 1;
+	while (i < argc - 1 && argv[i][0] == '-' && argv[i][1])
+	{
+		int last = 0;
+		p = &argv[i][1];
+
+		if (strspn(p, "vie") != strlen(p))
+			break;
+
+		while (*p)
+		{
+			switch (*p++)
+			{
+			case 'v':
+				state->flags |= MATCH_INVERT;
+				break;
+
+			case 'i':
+				rflags |= REG_ICASE;
+				break;
+
+			case 'e':
+			    	last++;
+			    	break;
+			}
+		}
+
+		i++;
+		if (last)
+			break;
+	}
+
+	p = join_words(argc-i, argv+i);
+	if ((i = regcomp(&state->match.re, p, rflags)))
+	{
+		if (cli->client)
+			fprintf(cli->client, "Invalid pattern \"%s\"\r\n", p);
+
+	    	free(p);
+		return CLI_ERROR;
+	}
+
+	free(p);
+	return CLI_OK;
 }
 
-int cli_filter_between(struct cli_def *cli, char *string, char *params[], int num_params)
+int cli_match_filter(struct cli_def *cli, char *string, void *data)
 {
-	static int started;
+	struct cli_match_filter_state *state = data;
+	int r = CLI_ERROR;
 
-	if (!cli->filter_data)
+    	if (!string) // clean up
 	{
-		started = 0;
-		cli->filter_data = &started;
+	    	if (state->flags & MATCH_REGEX)
+			regfree(&state->match.re);
+		else
+			free(state->match.string);
+
+		free(state);
+		return CLI_OK;
 	}
 
-	if (num_params != 2)
-		return CLI_OK;
-	if (!string)
-		return CLI_OK;
-
-	if (!started)
+	if (state->flags & MATCH_REGEX)
 	{
-		if (strstr(string, params[0]) != NULL)
-		{
-			started = 1;
-			return CLI_OK;
-		}
+	    	if (!regexec(&state->match.re, string, 0, NULL, 0))
+			r = CLI_OK;
 	}
 	else
 	{
-		if (strstr(string, params[1]) != NULL)
-			started = 0;
-		return CLI_OK;
+		if (strstr(string, state->match.string))
+			r = CLI_OK;
 	}
 
-	return CLI_ERROR;
+	if (state->flags & MATCH_INVERT)
+	{
+		if (r == CLI_OK)
+			r = CLI_ERROR;
+		else
+			r = CLI_OK;
+	}
+
+	return r;
 }
 
-int cli_filter_count(struct cli_def *cli, char *string, char *params[], int num_params)
-{
-	static int count;
+struct cli_range_filter_state {
+	int matched;
+	char *from;
+	char *to;
+};
 
-	if (!cli->filter_data)
+int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt)
+{
+	struct cli_range_filter_state *state;
+	char *from = 0;
+	char *to = 0;
+
+	if (!strncmp(argv[0], "bet", 3)) // between
 	{
-		count = 0;
-		cli->filter_data = &count;
+		if (argc < 3)
+		{
+			if (cli->client)
+				fprintf(cli->client, "Between filter requires 2 arguments\r\n");
+
+			return CLI_ERROR;
+		}
+
+		from = strdup(argv[1]);
+		to = join_words(argc-2, argv+2);
+	}
+	else // begin
+	{
+		if (argc < 2)
+		{
+			if (cli->client)
+				fprintf(cli->client, "Begin filter requires an argument\r\n");
+
+			return CLI_ERROR;
+		}
+
+	    	from = join_words(argc-1, argv+1);
 	}
 
-	if (!string)
+	filt->filter = cli_range_filter;
+	filt->data = state = calloc(sizeof(struct cli_range_filter_state), 1);
+
+	state->from = from;
+	state->to = to;
+
+	return CLI_OK;
+}
+
+int cli_range_filter(struct cli_def *cli, char *string, void *data)
+{
+	struct cli_range_filter_state *state = data;
+	int r = CLI_ERROR;
+
+    	if (!string) // clean up
 	{
-		// Print count
-		fprintf(cli->client, "%d\r\n", count);
-		count = 0;
+		free(state->from);
+		free(state->to);
+		free(state);
 		return CLI_OK;
 	}
 
-	if (strlen(string))
-		count++;
+	if (!state->matched)
+		state->matched = !!strstr(string, state->from);
 
-	// Never print the displayed value, just count it
-	return CLI_ERROR;
+	if (state->matched)
+	{
+	    	r = CLI_OK;
+		if (state->to && strstr(string, state->to))
+			state->matched = 0;
+	}
+
+	return r;
+}
+
+int cli_count_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt)
+{
+	if (argc > 1)
+	{
+		if (cli->client)
+			fprintf(cli->client, "Count filter does not take arguments\r\n");
+
+		return CLI_ERROR;
+	}
+
+	filt->filter = cli_count_filter;
+	filt->data = calloc(sizeof(int), 1);
+
+	return CLI_OK;
+}
+
+int cli_count_filter(struct cli_def *cli, char *string, void *data)
+{
+	int *count = data;
+
+    	if (!string) // clean up
+	{
+		// print count
+		if (cli->client)
+			fprintf(cli->client, "%d\r\n", *count);
+
+		free(count);
+		return CLI_OK;
+	}
+
+	while (isspace(*string))
+		string++;
+
+	if (*string)
+		(*count)++;  // only count non-blank lines
+
+	return CLI_ERROR; // no output
 }
 
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *))

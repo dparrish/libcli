@@ -1,4 +1,4 @@
-Version: 1.7.0
+Version: 1.8.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -39,6 +39,14 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Sun Jul 11 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.0-1
+- Dropped prompt arg from cli_loop now that prompt is set by
+  hostname/mode/priv level; bump soname.  Fixes ^L and ^A.
+- Reworked parsing/filters to allow multiple filters (cmd|inc X|count).
+- Made "grep" use regex, added -i, -v and -e args.
+- Added "egrep" filter.
+- Added "exclude" filter.
+
 * Fri Jul  2 2004 Brendan O'Dea <bod@optusnet.com.au> 1.7.0-1
 - Add mode argument to cli_file(), bump soname.
 - Return old value from cli_set_privilege(), cli_set_configmode().

@@ -31,16 +31,19 @@ struct cli_def
     char *promptchar;
     char *hostname;
     char *modestring;
-    char *enable;
     int privilege;
     int mode;
     int state;
-    int (*filter)(struct cli_def *cli, char *string, char *params[], int num_params);
-    int filter_param_i;
-    char **filter_param_s;
-    void *filter_data;
+    struct cli_filter *filters;
     void (*print_callback)(struct cli_def *cli, char *string);
     FILE *client;
+};
+
+struct cli_filter
+{
+    int (*filter)(struct cli_def *cli, char *string, void *data);
+    void *data;
+    struct cli_filter *next;
 };
 
 struct cli_command
@@ -60,7 +63,7 @@ struct cli_def *cli_init();
 int cli_done(struct cli_def *cli);
 struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *, char *, char **, int), int privilege, int mode, char *help);
 int cli_unregister_command(struct cli_def *cli, char *command);
-int cli_loop(struct cli_def *cli, int sockfd, char *prompt);
+int cli_loop(struct cli_def *cli, int sockfd);
 int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode);
 void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(char *, char *));
 void cli_set_enable_callback(struct cli_def *cli, int (*enable_callback)(char *));
@@ -75,8 +78,6 @@ int cli_set_configmode(struct cli_def *cli, int mode, char *config_desc);
 void cli_reprompt(struct cli_def *cli);
 void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli));
 void cli_print(struct cli_def *cli, char *format, ...);
-void cli_add_filter(struct cli_def *cli, int (*filter)(struct cli_def *, char *, char **, int), char *params[], int num_params);
-void cli_clear_filter(struct cli_def *cli);
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *));
 
 #endif
