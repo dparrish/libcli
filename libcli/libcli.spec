@@ -1,4 +1,4 @@
-Version: 1.6.1
+Version: 1.6.2
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -39,9 +39,10 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
-* Fri Jun 25 2004 Brendan O'Dea <bod@optusnet.com.au> 1.6.1-1
+* Fri Jun 25 2004 Brendan O'Dea <bod@optusnet.com.au> 1.6.2-1
 - Small cosmetic changes to output.
 - Exiting configure/^Z shouldn't disable.
+- Support encrypted password.
 
 * Fri Jun 25 2004 David Parrish <david@dparrish.com> 1.6.0
 - Add support for privilege levels and nested config levels. Thanks to Friedhelm
