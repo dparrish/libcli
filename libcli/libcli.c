@@ -116,14 +116,26 @@ void cli_deny_user(struct cli_def *cli, char *username)
 
 void cli_set_banner(struct cli_def *cli, char *banner)
 {
-	if (cli->banner) free(cli->banner);
-	cli->banner = strdup(banner);
+	if (cli->banner)
+	{
+		free(cli->banner);
+		cli->banner = 0;
+	}
+
+	if (banner && *banner)
+		cli->banner = strdup(banner);
 }
 
 void cli_set_hostname(struct cli_def *cli,char *hostname)
 {
-	if (cli->hostname) free(cli->hostname);
-	cli->hostname = strdup(hostname);
+	if (cli->hostname)
+	{
+		free(cli->hostname);
+		cli->hostname = 0;
+	}
+
+	if (hostname && *hostname)
+		cli->hostname = strdup(hostname);
 }
 
 void cli_set_promptchar(struct cli_def *cli, char *promptchar)
