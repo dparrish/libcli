@@ -1,6 +1,6 @@
 MAJOR=1
 MINOR=6
-REVISION=0
+REVISION=2
 LIB=libcli.so
 
 PREFIX?=/usr/local
@@ -10,6 +10,7 @@ DEBUG=-g
 CFLAGS+=$(DEBUG) -O3 -Wall -funroll-loops
 LDFLAGS+=-shared -nostartfiles -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
 LIBPATH+= -L.
+LIBS=-lcrypt
 
 all:	$(LIB) clitest
 

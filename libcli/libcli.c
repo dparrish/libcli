@@ -1,12 +1,13 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
 #include <stdarg.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <memory.h>
 #include <malloc.h>
 #include <string.h>
 #include "libcli.h"
+#include <unistd.h>
 // vim:sw=8 ts=8
 
 enum cli_states
@@ -638,6 +639,21 @@ void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli))
 	cli->regular_callback = callback;
 }
 
+#define DES_PREFIX "{crypt}"	/* to distinguish b/w clear text and DES crypted */
+#define MD5_PREFIX "$1$"
+
+static int pass_matches(char *pass, char *try)
+{
+    int des;
+    if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX)-1)))
+    	pass += sizeof(DES_PREFIX)-1;
+
+    if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX)-1))
+    	try = crypt(try, pass);
+
+    return !strcmp(pass, try);
+}
+
 #define CTRL(c) (c - '@')
 
 int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
@@ -1192,7 +1208,8 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 				struct unp *u;
 				for (u = cli->users; u; u = u->next)
 				{
-					if (strcmp(username, u->username) == 0 && strcmp(password, u->password) == 0)
+					if (!strcmp(u->username, username)
+					    && pass_matches(u->password, password))
 					{
 						allowed++;
 						break;
@@ -1220,7 +1237,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			if (cli->enable_password)
 			{
 				// Check stored static enable password
-				if (strcmp(cli->enable_password, cmd) == 0)
+				if (pass_matches(cli->enable_password, cmd))
 					allowed++;
 			}
 			if (!allowed && cli->enable_callback)
