@@ -1,0 +1,109 @@
+libcli
+
+libcli emulates a cisco style telnet command-line interface.
+
+To compile:
+
+	make
+	make install
+
+This will install libcli.so into /usr/local/lib. If you want to change
+the location, edit Makefile.
+
+There is a test application built called clitest. Run this and telnet
+to port 8000.
+
+By default, a single username and password combination is enabled.
+
+Username: fred
+Password: nerk
+
+Get help by entering "help" or hitting ?.
+
+libcli provides support for using the arrow keys for command-line editing. Up
+and Down arrows will cycle through the command history, and Left & Right can be
+used for editing the current command line.
+libcli also works out the shortest way of entering a command, so if you have a
+command "show users grep foobar" defined, you can enter "sh us g foobar" if that
+is the shortest possible way of doing it.
+
+Enter "sh?" at the command line to get a list of commands starting with "sh"
+
+A few commands are defined in every libcli program:
+help
+quit
+exit
+logout
+history
+
+
+
+
+Use in your own code:
+
+First of all, make sure you #include <libcli.h> in your C code, and link
+with -lcli.
+
+If you have any trouble with this, have a look at clitest.c for a
+demonstration.
+
+Start your program off with a cli_init().
+This sets up the internal data structures required.
+
+When a user connects, they are presented with a greeting if one is set using the
+cli_set_banner(banner) function.
+
+
+By default, the command-line session is not authenticated, which means users
+will get full access as soon as they connect. As this may not be always the best
+thing, 2 methods of authentication are available.
+
+First, you can add username / password combinations with the
+cli_allow_user(username, password) function. When a user connects, they can
+connect with any of these username / password combinations.
+
+Secondly, you can add a callback using the cli_set_auth_callback(callback)
+function. This function is passed the username and password as char *, and must
+return CLI_OK if the user is to have access and CLI_ERROR if they are not.
+
+The library itself will take care of prompting the user for credentials.
+
+
+
+
+Commands are built using a tree-like structure. You define commands with the
+cli_register_command(parent, command, callback, help) function.
+
+parent is a cli_command * reference to a previously added command. Using a
+parent you can build up complex commands.
+e.g. to provide commands "show users", "show sessions" and "show people", use
+the following sequence:
+
+cli_command *c = cli_register_command(NULL, "show", NULL, NULL);
+cli_register_command(c, "sessions", fn_sessions, "Show the sessions connected");
+cli_register_command(c, "users", fn_users, "Show the users connected");
+cli_register_command(c, "people", fn_people, "Show a list of the people I like");
+
+
+If callback is NULL, the command can be used as part of a tree, but cannot be
+individually run. 
+
+
+If you decide later that you don't want a command to be run, you can call
+cli_unregister_command(command).
+You can use this to build dynamic command trees.
+
+
+
+You are responsible for accepting a TCP connection, and for creating
+a process or thread to run the cli. Once you are ready to process the
+connection, call cli_loop(sock, "cli>"), where sock is the socket of the
+connection, and "cli>" is the prompt you wish to give your users.
+
+This function will return when the user exits the cli, either by breaking the
+connection or entering "quit".
+
+Call cli_done() to free the data structures.
+
+
+- David Parrish (david@dparrish.com)
