@@ -39,7 +39,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
-* ? Brendan O'Dea <bod@optusnet.com.au> 1.8.2-1
+* Fri Nov 19 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.3-1
 - Free help if set in cli_unregister_command (reported by Jung-Che Vincent Li)
 - Correct auth_callback() documentation (reported by Serge B. Khvatov)
 
