@@ -13,9 +13,11 @@ struct cli_def
     int completion_callback;
     struct cli_command *commands;
     int (*auth_callback)(char *, char *);
+    int (*regular_callback)(struct cli_def *cli, FILE *);
     char *banner;
     struct unp *users;
     char *history[MAX_HISTORY];
+    char showprompt;
 };
 
 struct cli_command
@@ -38,5 +40,6 @@ void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(char *, cha
 void cli_allow_user(struct cli_def *cli, char *username, char *password);
 void cli_deny_user(struct cli_def *cli, char *username);
 void cli_set_banner(struct cli_def *cli, char *banner);
+void cli_reprompt(struct cli_def *cli);
 
 #endif
