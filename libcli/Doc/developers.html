@@ -25,6 +25,9 @@
 		<LI><A HREF="#cli_regular">cli_regular()</A></LI>
 		<LI><A HREF="#cli_add_filter">cli_add_filter()</A></LI>
 		<LI><A HREF="#cli_clear_filter">cli_clear_filter()</A></LI>
+		<LI><A HREF="#cli_file">cli_file()</A></LI>
+		<LI><A HREF="#cli_print">cli_print()</A></LI>
+		<LI><A HREF="#cli_print_callback">cli_print_callback()</A></LI>
 	</OL>
 </OL>
 
@@ -50,8 +53,9 @@ Two methods of authentcation are supported by libcli - internal and callback.
 
 <P>
 Internal authentication is based on a list of username / password
-combinations that are set up before cli_loop() is called. This list is
-checked with strcasecmp() for the username and strcmp() for the password.
+combinations that are set up before <A HREF="#cli_loop()">cli_loop()</A>
+is called. This list is checked with strcasecmp() for the username and
+strcmp() for the password.
 </P>
 
 <P>
@@ -63,8 +67,9 @@ other database, e.g. LDAP.
 
 <P>
 If neither <EM>cli_set_auth_callback</EM> or <EM>cli_allow_user</EM>
-have been called before cli_loop(), then authentication will be disabled
-and the user will not be prompted for a username / password combination.
+have been called before <A HREF="#cli_loop()">cli_loop()</A>, then
+authentication will be disabled and the user will not be prompted for
+a username / password combination.
 </P>
 
 <H2><A NAME="tutorial">3.0 Tutorial</A></H2>
@@ -161,7 +166,9 @@ NULL when it was registered, so the command will not be available.
 </P>
 
 <P>
-Also, the standard libcli commands <EM>help</EM>, <EM>exit</EM>, <EM>logout</EM>, <EM>quit</EM> and <EM>history</EM> are also available automatically.
+Also, the standard libcli commands <EM>help</EM>, <EM>exit</EM>,
+<EM>logout</EM>, <EM>quit</EM> and <EM>history</EM> are also available
+automatically.
 </P>
 
 </LI>
@@ -169,21 +176,21 @@ Also, the standard libcli commands <EM>help</EM>, <EM>exit</EM>, <EM>logout</EM>
 <LI>
 Make this program complete by adding the callback functions.
 <PRE>
-int cmd_test(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
+int cmd_test(struct cli_def *cli, char *command, char *argv[], int argc)
 {
     int i;
-    cli_print(cli, client, "called %s with %s\r\n", __FUNCTION__, command);
+    cli_print(cli, "called %s with %s\r\n", __FUNCTION__, command);
     return CLI_OK;
 }
 
-int cmd_set(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
+int cmd_set(struct cli_def *cli, char *command, char *argv[], int argc)
 {
     if (argc &lt; 2)
     {
-	cli_print(cli, client, "Specify a variable to set\r\n");
+	cli_print(cli, "Specify a variable to set\r\n");
 	return CLI_OK;
     }
-    cli_print(cli, client, "Setting %s to %s\r\n", argv[0], argv[1]);
+    cli_print(cli, "Setting %s to %s\r\n", argv[0], argv[1]);
     return CLI_OK;
 }
 </PRE>
@@ -203,7 +210,8 @@ with test</CODE>".
 </P>
 
 <P>
-<EM>cmd_set</EM> handles the arguments given on the command line. This allows you to use a single callback to handle lots of arguments like:
+<EM>cmd_set</EM> handles the arguments given on the command line. This
+allows you to use a single callback to handle lots of arguments like:
 <UL>
 <LI>set colour green</LI>
 <LI>set name David</LI>
@@ -220,7 +228,8 @@ Compile the code
 gcc libclitest.c -o libclitest -lcli
 </PRE>
 
-You can now run the program with ./libclitest and telnet to port 12345 to see your work in action.
+You can now run the program with ./libclitest and telnet to port 12345
+to see your work in action.
 
 </LI>
 </OL>
@@ -246,19 +255,25 @@ This is optional, but it's a good idea to call this when you are finished
 with libcli. This frees memory used by libcli.
 </P>
 
-<H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(FILE *, char *, char **, int), char *help</EM>)</A></H3>
+<H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *, char *, char **, int), char *help</EM>)</A></H3>
 
 <P>
-Add a command to the internal command tree. Returns a <EM>struct cli_command *</EM>, which you can pass as <EM>parent</EM> to another call to <EM>cli_register_command</EM>.
+Add a command to the internal command tree. Returns a <EM>struct
+cli_command *</EM>, which you can pass as <EM>parent</EM> to another
+call to <EM>cli_register_command</EM>.
 </P>
 
-<P>When the command has been entered by the user, <EM>callback</EM> is checked. If it is not NULL, then the callback is called with:</P>
+<P>When the command has been entered by the user, <EM>callback</EM>
+is checked. If it is not NULL, then the callback is called with:</P>
 <OL>
-<LI>struct cli_def * - the handle of the cli structure. This must be passed to all cli functions, including cli_print().</LI>
-<LI>FILE * - the output stream</LI>
-<LI>char * - the entire command which was entered. This is after command expansion.</LI>
-<LI>char ** - the list of arguments entered</LI>
-<LI>char ** - the number of arguments entered</LI>
+	<LI>struct cli_def * - the handle of the cli structure. This
+	must be passed to all cli functions, including
+	<A HREF="#cli_print">cli_print()</A>.</LI>
+	<LI>FILE * - the output stream</LI>
+	<LI>char * - the entire command which was entered. This is after command
+	expansion.</LI>
+	<LI>char ** - the list of arguments entered</LI>
+	<LI>char ** - the number of arguments entered</LI>
 </OL>
 
 <P>The callback must return <EM>CLI_OK</EM> if the command was successful,
@@ -288,9 +303,9 @@ and the string that the user will be prompted with.
 </P>
 
 <P>
-cli_loop() handles the telnet negotiation and authentication. It
-returns only when the connection is finished, either by a server or
-client disconnect.
+<A HREF="#cli_loop()">cli_loop()</A> handles the telnet negotiation
+and authentication. It returns only when the connection is finished,
+either by a server or client disconnect.
 </P>
 
 <P>
@@ -341,7 +356,7 @@ connect. This may be a security warning for example.
 If <EM>banner</EM> is NULL, then no banner will be presented (the default).
 </P>
 
-<H3><A NAME="cli_regular">4.10 cli_regular(<EM>struct cli_def *cli, int(*callback)(struct cli_def *, FILE *)</EM>)</A></H3>
+<H3><A NAME="cli_regular">4.10 cli_regular(<EM>struct cli_def *cli, int(*callback)(struct cli_def *)</EM>)</A></H3>
 
 <P>
 Adds a callback function which will be called every second that a user
@@ -361,9 +376,9 @@ be disconnected.
 <H3><A NAME="cli_add_filter">4.11 cli_add_filter(<EM>struct cli_def *cli, int(*filter)(struct cli_def *, char *, char **, int), char *params[], int num_params</EM>)</A></H3>
 
 <P>
-This will place a custom filter on all output generated by
-cli_print(). This will erase any existing filters, so it is not possible
-to have multiple concurrent filters applied.
+This will place a custom filter on all output generated by <A
+HREF="#cli_print()">cli_print()</A>. This will erase any existing filters,
+so it is not possible to have multiple concurrent filters applied.
 </P>
 
 <P>
@@ -373,9 +388,10 @@ should use, and the size of that array.
 </P>
 
 <P>
-The <EM>filter</EM> callback will only ever be called by the cli_print()
-function when output should be generated. It should return CLI_OK if the
-output should be displayed, or CLI_ERROR if the output should be supressed.
+The <EM>filter</EM> callback will only ever be called by the <A
+HREF="#cli_print()">cli_print()</A> function when output should be
+generated. It should return CLI_OK if the output should be displayed,
+or CLI_ERROR if the output should be supressed.
 </P>
 
 <P>
@@ -395,6 +411,46 @@ or <EM>between</EM>.
 This will clear any filters that are currently being applied to output.
 </P>
 
-<SMALL>David Parrish &lt;david@dparrish.com&gt; 2003-04-23</SMALL>
+<H3><A NAME="cli_file">4.13 cli_file(<EM>struct cli_def *cli, FILE *f</EM>)</A></H3>
+
+<P>
+This reads and processes every line read from <EM>f</EM> as if it were
+entered at the console.
+</P>
+
+<H3><A NAME="cli_print">4.14 cli_print(<EM>struct cli_def *cli, char *format, ...</EM>)</A></H3>
+
+<P>
+This function should be called for any output generated by a command
+callback.
+</P>
+
+<P>
+It takes a printf() style format string and a variable number of arguments.
+</P>
+
+<P>
+Be aware that any output generated by cli_print will be passed through
+any filter currently being applied, and the output will be redirected
+to the <A HREF="#cli_print">cli_print_callback()</A> if one has been
+specified.
+</P>
+
+<H3><A NAME="cli_print_callback">4.15 cli_print_callback(<EM>struct cli_def *cli, void (*callback)(struct cli_def *, char *)</EM>)</A></H3>
+
+<P>
+Whenever <A HREF="#cli_print">cli_print()</A> is called from within
+a callback, the output generally goes to the user. If you specify a
+callback using this function, then the output will be sent to that
+callback. The function will be called once for each line, and it will
+be passed a single null-terminated string, without any newline characters.
+</P>
+
+<P>
+Specifying NULL asl the callback parameter will make libcli use the
+default <A HREF="#cli_print">cli_print()</A> function.
+</P>
+
+<SMALL>David Parrish &lt;david@dparrish.com&gt; 2004-02-25</SMALL>
 </BODY>
 </HTML>

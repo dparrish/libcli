@@ -39,6 +39,12 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Tue Feb 24 2004 David Parrish <david@dparrish.com>
+- Add cli_print_callback() for overloading the output
+- Don't pass around the FILE * handle anymore, it's in the cli_def struct anyway
+- Add cli_file() to execute every line read from a file handle
+- Add filter_count
+
 * Sat Feb 14 2004 Brendan O'Dea <bod@optusnet.com.au> 1.4.0-1
 - Add more line editing support: ^W, ^A, ^E, ^P, ^N, ^F, ^B
 - Modify cli_print() to add \r\n and to split on \n to allow inc/begin
