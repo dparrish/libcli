@@ -1,10 +1,10 @@
 <HTML>
 <HEAD>
-<TITLE>libcli Developer's Reference</TITLE>
+<TITLE>libcli 1.6.0 Developer's Reference</TITLE>
 </HEAD>
 <BODY>
 
-<H1>libcli Developer's Reference</H1>
+<H1>libcli 1.6.0 Developer's Reference</H1>
 
 <H2><A NAME="TOC">Table of Contents</A></H2>
 <OL>
@@ -28,6 +28,9 @@
 		<LI><A HREF="#cli_file">cli_file()</A></LI>
 		<LI><A HREF="#cli_print">cli_print()</A></LI>
 		<LI><A HREF="#cli_print_callback">cli_print_callback()</A></LI>
+		<LI><A HREF="#cli_set_enable_callback">cli_set_enable_callback()</A></LI>
+		<LI><A HREF="#cli_allow_enable">cli_allow_enable()</A></LI>
+		<LI><A HREF="#cli_set_configmode">cli_set_configmode()</A></LI>
 	</OL>
 </OL>
 
@@ -72,6 +75,12 @@ authentication will be disabled and the user will not be prompted for
 a username / password combination.
 </P>
 
+<P>
+Authentication for the privileged state can also be defined by a static password
+or by a callback. Use the <EM>cli_set_enable_callback</EM> or
+<EM>cli_allow_enable</EM> functions to set the enable password.
+</P>
+
 <H2><A NAME="tutorial">3.0 Tutorial</A></H2>
 
 This section will guide you through implementing libcli in a basic server.
@@ -103,19 +112,19 @@ int main(int argc, char *argv[])
 	cli_allow_user(cli, "foo", "bar");
 
 	<FONT COLOR=blue>// Set up a few simple one-level commands</FONT>
-	cli_register_command(cli, NULL, "test", cmd_test, NULL);
-	cli_register_command(cli, NULL, "simple", cmd_test, NULL);
-	cli_register_command(cli, NULL, "simon", NULL, NULL);
+	cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+	cli_register_command(cli, NULL, "simple", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+	cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-	<FONT COLOR=blue>// This command takes arguments</FONT>
-	cli_register_command(cli, NULL, "set", cmd_set, NULL);
+	<FONT COLOR=blue>// This command takes arguments, and requires privileged mode (enable)</FONT>
+	cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
 
 	<FONT COLOR=blue>// Set up 2 commands "show counters" and "show junk"</FONT>
-	c = cli_register_command(cli, NULL, "show", NULL, NULL);
+	c = cli_register_command(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	<FONT COLOR=blue>// Note how we store the previous command and use it as the parent for this one.</FONT>
-	cli_register_command(cli, c, "junk", cmd_test, NULL);
+	cli_register_command(cli, c, "junk", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 	<FONT COLOR=blue>// This one has some help text</FONT>
-	cli_register_command(cli, c, "counters", cmd_test, "Show the counters that the system uses");
+	cli_register_command(cli, c, "counters", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the counters that the system uses");
 
 	<FONT COLOR=blue>// Create a socket</FONT>
 	s = socket(AF_INET, SOCK_STREAM, 0);
@@ -255,7 +264,7 @@ This is optional, but it's a good idea to call this when you are finished
 with libcli. This frees memory used by libcli.
 </P>
 
-<H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *, char *, char **, int), char *help</EM>)</A></H3>
+<H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *, char *, char **, int), int privilege, int mode, char *help</EM>)</A></H3>
 
 <P>
 Add a command to the internal command tree. Returns a <EM>struct
@@ -282,7 +291,22 @@ command should be tried (if any), or <EM>CLI_QUIT</EM> to drop the
 connection (e.g. on a fatal error).</P>
 
 <P>If <EM>parent</EM> is NULL, the command is added to the top level of
-commands.</P>
+commands, otherwise it is a subcommand of <EM>parent</EM></P>
+
+<P>
+<EM>privilege</EM> should be set to either PRIVILEGE_PRIVILEGED or
+PRIVILEGE_UNPRIVILEGED. If set to PRIVILEGE_PRIVILEGED then the user must have
+entered <EM>enable</EM> before running this command.
+</P>
+
+<P>
+<EM>mode</EM> should be set to MODE_EXEC for no configuration mode, MODE_CONFIG
+for generic configuration commands, or your own config level. The user can enter
+the generic configuration level by entering <EM>configure terminal</EM>, and can
+return to MODE_EXEC by entering <EM>exit</EM> or <EM>CTRL-Z</EM>. You can define
+commands to enter your own configuration levels, which should call the
+<A HREF="#cli_set_configmode">cli_set_configmode</A> function.
+</P>
 
 <P>If <EM>help</EM> is provided, it is given to the user when the use
 the <EM>help</EM> command or press <B>?</B>.</P>
@@ -411,11 +435,12 @@ or <EM>between</EM>.
 This will clear any filters that are currently being applied to output.
 </P>
 
-<H3><A NAME="cli_file">4.13 cli_file(<EM>struct cli_def *cli, FILE *f</EM>)</A></H3>
+<H3><A NAME="cli_file">4.13 cli_file(<EM>struct cli_def *cli, FILE *f, int privilege</EM>)</A></H3>
 
 <P>
 This reads and processes every line read from <EM>f</EM> as if it were
-entered at the console.
+entered at the console. The privilege level will be set to <EM>privilege</EM>
+first.
 </P>
 
 <H3><A NAME="cli_print">4.14 cli_print(<EM>struct cli_def *cli, char *format, ...</EM>)</A></H3>
@@ -447,10 +472,44 @@ be passed a single null-terminated string, without any newline characters.
 </P>
 
 <P>
-Specifying NULL asl the callback parameter will make libcli use the
+Specifying NULL as the callback parameter will make libcli use the
 default <A HREF="#cli_print">cli_print()</A> function.
 </P>
 
-<SMALL>David Parrish &lt;david@dparrish.com&gt; 2004-02-25</SMALL>
+<H3><A NAME="cli_set_enable_callback">4.16 cli_set_enable_callback(<EM>struct cli_def *cli, void (*callback)(struct cli_def *, char *)</EM>)</A></H3>
+
+<P>
+Just like <A HREF="#cli_set_auth_callback">cli_set_auth_callback</A> this takes a pointer to a callback
+function to authorize privileged access. However this callback only takes a
+single string - the password.
+</P>
+
+<H3><A NAME="cli_allow_enable">4.17 cli_allow_enable(<EM>struct cli_def *cli, char *password</EM>)</A></H3>
+
+<P>
+This will allow a static password to be used for the <EM>enable</EM> command.
+This static password will be checked before running any enable callbacks.
+</P>
+
+<P>
+Set this to NULL to not have a static enable password.
+</P>
+
+<H3><A NAME="cli_set_configmode">4.18 cli_set_configmode(<EM>struct cli_def *cli, int mode, char *string</EM>)</A></H3>
+
+<P>
+This will set the configuration mode. Once set, commands will be restricted to
+only ones in the selected configuration mode, plus any set to MODE_ANY.
+</P>
+
+<P>
+The string passed will be used to build the prompt in the set configuration
+mode. e.g. if you set the string <B>test</B>, the prompt will become:
+<PRE>
+hostname(config-test)#
+</PRE>
+</P>
+
+<SMALL>David Parrish &lt;david@dparrish.com&gt; 2004-06-25</SMALL>
 </BODY>
 </HTML>
