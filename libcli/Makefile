@@ -31,7 +31,10 @@ clean:
 install: $(LIB)
 	install -d $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib
 	install -m 0644 libcli.h $(DESTDIR)$(PREFIX)/include
-	install -m 0755 $(LIB)* $(DESTDIR)$(PREFIX)/lib
+	install -m 0755 $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(DESTDIR)$(PREFIX)/lib
+	cd $(DESTDIR)$(PREFIX)/lib && \
+	    ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR) && \
+	    ln -s $(LIB).$(MAJOR).$(MINOR) $(LIB)
 
 rpm:
 	mkdir libcli-$(MAJOR).$(MINOR).$(REVISION)
