@@ -101,7 +101,7 @@ int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
 	for (c->unique_len = 1; c->unique_len <= strlen(c->command); c->unique_len++)
 	{
 	    int foundmatch = 0;
-	    for (p = cli->commands; p; p = p->next)
+	    for (p = commands; p; p = p->next)
 	    {
 		if (c == p) continue;
 		if (strncmp(p->command, c->command, c->unique_len) == 0) foundmatch++;
@@ -434,7 +434,7 @@ int cli_find_command(struct cli_def *cli, FILE *client, struct cli_command *comm
 	    return rc;
 	}
     }
-    fprintf(client, "Invalid command \"%s\"\r\n", words[start_word]);
+    fprintf(client, "Invalid %s \"%s\"\r\n", commands->parent ? "argument" : "command", words[start_word]);
     return CLI_ERROR;
 }
 
@@ -575,6 +575,12 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			    break;
 		    case 2: write(sockfd, prompt, strlen(prompt));
 			    write(sockfd, cmd, l);
+			    if (cursor < l)
+			    {
+				int n = l - cursor;
+				while (n--)
+				    write(sockfd, "\b", 1);
+			    }
 			    break;
 		}
 		cli->showprompt = 0;
@@ -702,8 +708,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		    {
 			if (l == cursor)
 			{
-			    cursor--;
-			    cmd[l] = 0;
+			    cmd[--cursor] = 0;
 			    if (state != 1) write(sockfd, "\b \b", 3);
 			}
 			else
