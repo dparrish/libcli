@@ -9,6 +9,15 @@
 #include "libcli.h"
 // vim:sw=8 ts=8
 
+enum cli_states
+{
+	STATE_LOGIN,
+	STATE_PASSWORD,
+	STATE_NORMAL,
+	STATE_ENABLE_PASSWORD,
+	STATE_ENABLE,
+};
+
 struct unp
 {
 	char *username;
@@ -49,6 +58,11 @@ void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(char *, cha
 	cli->auth_callback = auth_callback;
 }
 
+void cli_set_enable_callback(struct cli_def *cli, int (*enable_callback)(char *))
+{
+	cli->enable_callback = enable_callback;
+}
+
 void cli_allow_user(struct cli_def *cli, char *username, char *password)
 {
 	struct unp *u, *n;
@@ -64,6 +78,14 @@ void cli_allow_user(struct cli_def *cli, char *username, char *password)
 		for (u = cli->users; u && u->next; u = u->next);
 		if (u) u->next = n;
 	}
+}
+
+void cli_allow_enable(struct cli_def *cli, char *password)
+{
+	if (cli->enable_password)
+		free(cli->enable_password);
+
+	cli->enable_password = strdup(password);
 }
 
 void cli_deny_user(struct cli_def *cli, char *username)
@@ -93,6 +115,65 @@ void cli_set_banner(struct cli_def *cli, char *banner)
 	cli->banner = strdup(banner);
 }
 
+void cli_set_hostname (struct cli_def *cli,char *hostname)
+{
+	if (cli->hostname) free(cli->hostname);
+	cli->hostname = strdup(hostname);
+}
+
+void cli_set_promptchar (struct cli_def *cli, char *promptchar)
+{
+	if (cli->promptchar) free(cli->promptchar);
+	cli->promptchar = strdup(promptchar);
+}
+
+void cli_set_privilege (struct cli_def *cli, int privilege)
+{
+	cli->privilege = privilege;
+	switch(privilege)
+	{
+		case PRIVILEGE_UNPRIVILEGED:
+			cli_set_promptchar(cli,">");
+			break;
+		case PRIVILEGE_PRIVILEGED:
+			cli_set_promptchar(cli,"#");
+			break;
+		default:
+			cli_set_promptchar(cli,">");
+	}
+}
+
+void cli_set_modestring(struct cli_def *cli, char *modestring)
+{
+	if (cli->modestring)
+	{
+		free(cli->modestring);
+		cli->modestring = NULL;
+	}
+	if (modestring) cli->modestring = strdup(modestring);
+}
+
+void cli_set_configmode(struct cli_def *cli, int mode, char *config_desc)
+{
+	cli->mode = mode;
+	if (!cli->mode)
+	{
+		// Not config mode
+		cli_set_modestring(cli, NULL);
+		return;
+	}
+	if (config_desc && *config_desc)
+	{
+		char string[64];
+		snprintf(string, 64, "(config-%s)", config_desc);
+		cli_set_modestring(cli, string);
+	}
+	else
+	{
+		cli_set_modestring(cli, "(config)");
+	}
+}
+
 int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
 {
 	struct cli_command *c, *p;
@@ -114,7 +195,7 @@ int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
 	return CLI_OK;
 }
 
-struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *cli, char *, char **, int), char *help)
+struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *cli, char *, char **, int), int privilege, int mode, char *help)
 {
 	struct cli_command *c, *p;
 
@@ -125,6 +206,8 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
 	c->next = NULL;
 	c->command = strdup(command);
 	c->parent = parent;
+	c->privilege = privilege;
+	c->mode = mode;
 	if (help) c->help = strdup(help);
 
 	if (parent)
@@ -188,7 +271,8 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
 	struct cli_command *p;
 	for (p = c; p; p = p->next)
 	{
-		if (p->command && p->callback)
+		if (p->command && p->callback && cli->privilege >= p->privilege &&
+				(p->mode == cli->mode || p->mode == MODE_ANY))
 		{
 			cli_print(cli, "%-20s%s", cli_command_name(cli, p), p->help ? : "");
 		}
@@ -197,6 +281,29 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
 			cli_show_help(cli, p->children);
 		}
 	}
+	return CLI_OK;
+}
+
+int cli_int_enable(struct cli_def *cli, char * command, char *argv[], int argc)
+{
+	if (!cli->enable_password && !cli->enable_callback)
+	{
+		// No password required, set privilege immediately
+		cli_set_privilege(cli, PRIVILEGE_PRIVILEGED);
+		cli_set_configmode(cli, MODE_EXEC, NULL);
+	}
+	else
+	{
+		// Require password entry
+		cli->state = STATE_ENABLE_PASSWORD;
+	}
+	return CLI_OK;
+}
+
+int cli_int_disable(struct cli_def *cli, char * command, char *argv[], int argc)
+{
+	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
+	cli_set_configmode(cli, MODE_EXEC, NULL);
 	return CLI_OK;
 }
 
@@ -222,21 +329,45 @@ int cli_int_history(struct cli_def *cli, char *command, char *argv[], int argc)
 
 int cli_int_quit(struct cli_def *cli, char *command, char *argv[], int argc)
 {
+	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
+	cli_set_configmode(cli, MODE_EXEC, NULL);
 	return CLI_QUIT;
+}
+
+int cli_int_configure_terminal(struct cli_def *cli, char *command, char *argv[], int argc)
+{
+	cli_set_configmode(cli, MODE_CONFIG, NULL);
+	return CLI_OK;
+}
+
+int cli_int_exit_conf(struct cli_def *cli, char *command, char *argv[], int argc)
+{
+	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
+	cli_set_configmode(cli, MODE_EXEC, NULL);
+	return CLI_OK;
 }
 
 struct cli_def *cli_init()
 {
 	struct cli_def *cli;
+	struct cli_command *c;
 
 	if (!(cli = calloc(sizeof(struct cli_def), 1))) return cli;
+	cli_register_command(cli, NULL, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
+	cli_register_command(cli, NULL, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
+	cli_register_command(cli, NULL, "logout", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
+	cli_register_command(cli, NULL, "exit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Disconnect");
+	cli_register_command(cli, NULL, "history", cli_int_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show a list of previously run commands");
+	cli_register_command(cli, NULL, "enable", cli_int_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Turn on privileged commands");
+	cli_register_command(cli, NULL, "disable", cli_int_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Turn off privileged commands");
+	cli_register_command(cli, NULL, "exit", cli_int_quit, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Exit from the EXEC");
 
-	cli_register_command(cli, NULL, "help", cli_int_help, "Show available commands");
-	cli_register_command(cli, NULL, "quit", cli_int_quit, "Disconnect");
-	cli_register_command(cli, NULL, "logout", cli_int_quit, "Disconnect");
-	cli_register_command(cli, NULL, "exit", cli_int_quit, "Disconnect");
-	cli_register_command(cli, NULL, "history", cli_int_history, "Show a list of previously run commands");
+	c = cli_register_command(cli, NULL, "configure", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
+	cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Configure from the terminal");
 
+	cli_register_command(cli, NULL, "exit", cli_int_exit_conf, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Exit from configure mode");
+	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
+	cli_set_configmode(cli, MODE_EXEC, NULL);
 	return cli;
 }
 
@@ -378,7 +509,7 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 
 		for (c = commands; c; c = c->next)
 		{
-			if (strncasecmp(c->command, words[start_word], l) == 0 && (c->callback || c->children))
+			if (strncasecmp(c->command, words[start_word], l) == 0 && (c->callback || c->children) && cli->privilege >= c->privilege && (c->mode == cli->mode || c->mode == MODE_ANY))
 			{
 				fprintf(cli->client, "%-20s%s\r\n", c->command, c->help ? : "");
 			}
@@ -389,7 +520,7 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 
 	for (c = commands; c; c = c->next)
 	{
-		if (strncasecmp(c->command, words[start_word], c->unique_len) == 0 && strncasecmp(c->command, words[start_word], strlen(words[start_word])) == 0)
+		if (strncasecmp(c->command, words[start_word], c->unique_len) == 0 && strncasecmp(c->command, words[start_word], strlen(words[start_word])) == 0 && cli->privilege >= c->privilege && (c->mode == cli->mode || c->mode == MODE_ANY))
 		{
 			int rc;
 
@@ -514,14 +645,14 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	char *cmd, *oldcmd = NULL;
 	int l, oldl = 0, is_telnet_option = 0, skip = 0, esc = 0;
 	int cursor = 0, insertmode = 1;
-	int state = 0;
 	char *username = NULL, *password = NULL;
-
 	char *negotiate =
 		"\xFF\xFB\x03"
 		"\xFF\xFB\x01"
 		"\xFF\xFD\x03"
 		"\xFF\xFD\x01";
+
+	cli->state = STATE_LOGIN;
 
 	memset(cli->history, 0, MAX_HISTORY);
 	write(sockfd, negotiate, strlen(negotiate));
@@ -529,18 +660,24 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	cmd = malloc(4096);
 
 	cli->client = fdopen(sockfd, "w+");
-
 	setbuf(cli->client, NULL);
 	if (cli->banner)
 		fprintf(cli->client, "%s\r\n", cli->banner);
 
-	if (!cli->users && !cli->auth_callback) state = 2;
+	// Start off in unprivileged mode
+	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
+	cli_set_configmode(cli, MODE_EXEC, NULL);
+
+	// No auth required?
+	if (!cli->users && !cli->auth_callback) cli->state = STATE_NORMAL;
 
 	while (1)
 	{
 		signed int in_history = 0;
 		int lastchar = 0;
 		struct timeval tm;
+		char cliprompt[64];
+
 		cli->showprompt = 1;
 
 		if (oldcmd)
@@ -565,25 +702,38 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		{
 			int sr;
 			fd_set r;
-
 			if (cli->showprompt)
 			{
 				write(sockfd, "\r\n", 2);
-				switch (state)
+				switch (cli->state)
 				{
-					case 0: write(sockfd, "Username: ", strlen("Username: "));
-							break;
-					case 1: write(sockfd, "Password: ", strlen("Password: "));
-							break;
-					case 2: write(sockfd, prompt, strlen(prompt));
-							write(sockfd, cmd, l);
-							if (cursor < l)
-							{
-								int n = l - cursor;
-								while (n--)
-									write(sockfd, "\b", 1);
-							}
-							break;
+					case STATE_LOGIN:
+						write(sockfd, "Username: ", strlen("Username: "));
+						break;
+					case STATE_PASSWORD:
+						write(sockfd, "Password: ", strlen("Password: "));
+						break;
+					case STATE_NORMAL:
+					case STATE_ENABLE:
+						if (cli->modestring)
+							snprintf(cliprompt, 64, "%s%s%s ",
+								cli->hostname, cli->modestring, cli->promptchar);
+						else
+							snprintf(cliprompt, 64, "%s%s ",
+								cli->hostname, cli->promptchar);
+						write(sockfd, cliprompt, strlen(cliprompt));
+						write(sockfd, cmd, l);
+						if (cursor < l)
+						{
+							int n = l - cursor;
+							while (n--)
+								write(sockfd, "\b", 1);
+						}
+						break;
+					case STATE_ENABLE_PASSWORD:
+						write(sockfd, "Password: ", strlen("Password: "));
+						break;
+
 				}
 				cli->showprompt = 0;
 			}
@@ -646,11 +796,24 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 					// Remap to readline control codes
 					switch (c)
 					{
-					case 'A': c = CTRL('P'); break; // Up
-					case 'B': c = CTRL('N'); break; // Down
-					case 'C': c = CTRL('F'); break; // Right
-					case 'D': c = CTRL('B'); break; // Left
-					default:  c = 0;
+						case 'A':
+							// Up
+							c = CTRL('P');
+							break;
+						case 'B':
+							// Down
+							c = CTRL('N');
+							break;
+						case 'C':
+							// Right
+							c = CTRL('F');
+							break;
+						case 'D':
+							// Left
+							c = CTRL('B');
+							break;
+						default:
+							c = 0;
 					}
 					esc = 0;
 				}
@@ -663,7 +826,11 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 
 			if (c == 0) continue;
 			if (c == '\n') continue;
-			if (c == '\r') { if (state == 2) write(sockfd, "\r\n", 2); break; }
+			if (c == '\r') {
+				if ((cli->state == STATE_NORMAL) || (cli->state == STATE_ENABLE))
+					write(sockfd, "\r", 1);
+				break;
+			}
 
 			if (c == 27) { esc = 1; continue; }
 			if (c == CTRL('C')) { write(sockfd, "\a", 1); continue; }
@@ -711,13 +878,14 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 						if (l == cursor)
 						{
 							cmd[--cursor] = 0;
-							if (state != 1) write(sockfd, "\b \b", 3);
+							if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+								write(sockfd, "\b \b", 3);
 						}
 						else
 						{
 							int i;
 							cursor--;
-							if (state != 1)
+							if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
 							{
 								for (i = cursor; i <= l; i++) cmd[i] = cmd[i+1];
 								write(sockfd, "\b", 1);
@@ -752,7 +920,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			// Clear line
 			if (c == CTRL('U'))
 			{
-				if (state == 1)
+				if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
 				{
 					memset(cmd, 0, l);
 				}
@@ -773,8 +941,18 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 				break;
 			}
 
+			// disable
+			if (c == CTRL('Z') && cli->state == STATE_ENABLE)
+			{
+				cli_clear_line(sockfd, cmd, l, cursor);
+				cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
+				cli_set_configmode(cli, MODE_EXEC, NULL);
+				cli->showprompt = 1;
+				continue;
+			}
+
 			// Tab completion
-			if (state == 2 && c == CTRL('I'))
+			if ((cli->state == STATE_NORMAL || cli->state == STATE_ENABLE) && c == CTRL('I'))
 			{
 				char *completions[128];
 				int num_completions = 0;
@@ -830,7 +1008,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			{
 				int history_found = 0;
 
-				if (state != 2) continue;
+				if (cli->state != STATE_NORMAL && cli->state != STATE_ENABLE) continue;
 
 				if (c == CTRL('P')) // Up
 				{
@@ -866,7 +1044,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 					// Show history item
 					cli_clear_line(sockfd, cmd, l, cursor);
 					memset(cmd, 0, 4096);
-					strcpy(cmd, cli->history[in_history]);
+					strncpy(cmd, cli->history[in_history], 4095);
 					l = cursor = strlen(cmd);
 					write(sockfd, cmd, l);
 				}
@@ -927,7 +1105,16 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			{
 				// End of text
 				cmd[cursor] = c;
-				l++;
+				if (l < 4095)
+				{
+					l++;
+					cursor++;
+				}
+				else
+				{
+					write(sockfd, "", 1);
+					continue;
+				}
 			}
 			else
 			{
@@ -936,6 +1123,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 				{
 					int i;
 					// Move everything one character to the right
+					if (l >= 4094) l--;
 					for (i = l; i >= cursor; i--)
 						cmd[i + 1] = cmd[i];
 					// Write what we've just added
@@ -950,11 +1138,11 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 				{
 					cmd[cursor] = c;
 				}
+				cursor++;
 			}
-			cursor++;
 
 			// ?
-			if (state == 2 && c == 63 && cursor == l)
+			if ((cli->state == STATE_NORMAL || cli->state == STATE_ENABLE) && c == 63 && cursor == l)
 			{
 				write(sockfd, "\r\n", 2);
 				oldcmd = cmd;
@@ -962,7 +1150,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 				break;
 			}
 
-			if (state != 1) write(sockfd, &c, 1);
+			if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD) write(sockfd, &c, 1);
 			oldcmd = NULL;
 			oldl = 0;
 			lastchar = c;
@@ -971,23 +1159,20 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		if (l < 0) break;
 
 		if (strcasecmp(cmd, "quit") == 0) break;
-
-		if (state == 0)
+		if (cli->state == STATE_LOGIN)
 		{
 			if (l == 0) continue;
 
 			// Require login
 			if (username) free(username);
 			username = strdup(cmd);
-			state++;
+			cli->state = STATE_PASSWORD;
 			cli->showprompt = 1;
 		}
-		else if (state == 1)
+		else if (cli->state == STATE_PASSWORD)
 		{
 			// Require password
 			int allowed = 0;
-
-			if (l == 0) { state = 0; continue; }
 
 			if (password) free(password);
 			password = strdup(cmd);
@@ -1014,21 +1199,50 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 
 			if (allowed)
 			{
-				state = 2;
+				fprintf(cli->client, "\r\n");
+				cli->state = STATE_NORMAL;
 			}
 			else
 			{
-				fprintf(cli->client, "Access denied\r\n");
+				fprintf(cli->client, "\r\nAccess denied\r\n");
 				free(username); username = NULL;
 				free(password); password = NULL;
-				state = 0;
+				cli->state = STATE_LOGIN;
 			}
 			cli->showprompt = 1;
+		}
+		else if (cli->state == STATE_ENABLE_PASSWORD)
+		{
+			int allowed = 0;
+			if (cli->enable_password)
+			{
+				// Check stored static enable password
+				if (strcmp(cli->enable_password, cmd) == 0)
+					allowed++;
+			}
+			if (!allowed && cli->enable_callback)
+			{
+				// Check callback
+				if (cli->enable_callback(cmd))
+				{
+					allowed++;
+				}
+			}
+			if (allowed)
+			{
+				cli->state = STATE_ENABLE;
+				cli_set_privilege(cli, PRIVILEGE_PRIVILEGED);
+			}
+			else
+			{
+				fprintf(cli->client, "\r\nAccess denied\r\n");
+				cli->state = STATE_NORMAL;
+			}
 		}
 		else
 		{
 			if (l == 0) continue;
-			if (cmd[l-1] != '?' && strcasecmp(cmd, "history") != 0) cli_add_history(cli, cmd);
+			if (cmd[l - 1] != '?' && strcasecmp(cmd, "history") != 0) cli_add_history(cli, cmd);
 			if (cli_run_command(cli, cmd) == CLI_QUIT)
 				break;
 		}
@@ -1048,18 +1262,19 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	return CLI_OK;
 }
 
-int cli_file(struct cli_def *cli, FILE *fh)
+int cli_file(struct cli_def *cli, FILE *fh, int privilege)
 {
 	char *cmd;
 
 	cmd = malloc(4096);
 	cli->client = NULL;
+	cli->privilege = privilege;
 
 	while (1)
 	{
 		char *p;
 
-		if (fgets(cmd, 4096, fh) <= 0)
+		if (fgets(cmd, 4095, fh) <= 0)
 			break; // End of file
 
 		if ((p = strchr(cmd, '#'))) *p = 0;
@@ -1073,8 +1288,6 @@ int cli_file(struct cli_def *cli, FILE *fh)
 		if (cli_run_command(cli, cmd) == CLI_QUIT)
 			break;
 	}
-
-	free(cmd);
 	return CLI_OK;
 }
 
