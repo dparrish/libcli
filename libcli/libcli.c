@@ -498,13 +498,13 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	fprintf(client, "%s\r\n", cli->banner);
 
     if (!cli->users && !cli->auth_callback) state = 2;
-    cli->showprompt = 1;
 
     while (1)
     {
 	signed int in_history = 0;
 	int lastchar = 0;
 	struct timeval tm;
+	cli->showprompt = 1;
 
 	if (oldcmd)
 	{
