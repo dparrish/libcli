@@ -276,6 +276,7 @@ int cli_unregister_command(struct cli_def *cli, char *command)
 				cli->commands = c->next;
 
 			free(c->command);
+			if (c->help) free(c->help);
 			free(c);
 			return CLI_OK;
 		}
