@@ -1,7 +1,7 @@
 Version: 1.4.1
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 2
+Release: 3
 Copyright: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -24,7 +24,7 @@ make
 %install
 rm -rf $RPM_BUILD_ROOT
 make PREFIX=$RPM_BUILD_ROOT/usr install
-find $RPM_BUILD_ROOT/usr -type f -print | grep -v '\/(README|\.html)$' | \
+find $RPM_BUILD_ROOT/usr ! -type d -print | grep -v '\/(README|\.html)$' | \
     sed "s@^$RPM_BUILD_ROOT@@g" | sed "s/^\(.*\)$/\1\*/" > %{name}-%{version}-filelist
 
 %post
