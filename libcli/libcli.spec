@@ -1,4 +1,4 @@
-Version: 1.6.2
+Version: 1.7.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -39,6 +39,10 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Fri Jul  2 2004 Brendan O'Dea <bod@optusnet.com.au> 1.7.0-1
+- Add mode argument to cli_file(), bump soname.
+- Return old value from cli_set_privilege(), cli_set_configmode().
+
 * Fri Jun 25 2004 Brendan O'Dea <bod@optusnet.com.au> 1.6.2-1
 - Small cosmetic changes to output.
 - Exiting configure/^Z shouldn't disable.

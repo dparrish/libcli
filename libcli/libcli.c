@@ -1,11 +1,11 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
-#include <stdarg.h>
 #include <stdlib.h>
 #include <memory.h>
 #include <malloc.h>
 #include <string.h>
+#include <ctype.h>
 #include "libcli.h"
 #include <unistd.h>
 // vim:sw=8 ts=8
@@ -116,32 +116,27 @@ void cli_set_banner(struct cli_def *cli, char *banner)
 	cli->banner = strdup(banner);
 }
 
-void cli_set_hostname (struct cli_def *cli,char *hostname)
+void cli_set_hostname(struct cli_def *cli,char *hostname)
 {
 	if (cli->hostname) free(cli->hostname);
 	cli->hostname = strdup(hostname);
 }
 
-void cli_set_promptchar (struct cli_def *cli, char *promptchar)
+void cli_set_promptchar(struct cli_def *cli, char *promptchar)
 {
 	if (cli->promptchar) free(cli->promptchar);
 	cli->promptchar = strdup(promptchar);
 }
 
-void cli_set_privilege (struct cli_def *cli, int privilege)
+int cli_set_privilege(struct cli_def *cli, int privilege)
 {
+	int old = cli->privilege;
 	cli->privilege = privilege;
-	switch(privilege)
-	{
-		case PRIVILEGE_UNPRIVILEGED:
-			cli_set_promptchar(cli,">");
-			break;
-		case PRIVILEGE_PRIVILEGED:
-			cli_set_promptchar(cli,"#");
-			break;
-		default:
-			cli_set_promptchar(cli,">");
-	}
+
+	if (privilege != old)
+		cli_set_promptchar(cli, privilege == PRIVILEGE_PRIVILEGED ? "#" : ">");
+
+	return old;
 }
 
 void cli_set_modestring(struct cli_def *cli, char *modestring)
@@ -154,25 +149,31 @@ void cli_set_modestring(struct cli_def *cli, char *modestring)
 	if (modestring) cli->modestring = strdup(modestring);
 }
 
-void cli_set_configmode(struct cli_def *cli, int mode, char *config_desc)
+int cli_set_configmode(struct cli_def *cli, int mode, char *config_desc)
 {
+	int old = cli->mode;
 	cli->mode = mode;
-	if (!cli->mode)
+
+	if (mode != old)
 	{
-		// Not config mode
-		cli_set_modestring(cli, NULL);
-		return;
+		if (!cli->mode)
+		{
+			// Not config mode
+			cli_set_modestring(cli, NULL);
+		}
+		else if (config_desc && *config_desc)
+		{
+			char string[64];
+			snprintf(string, 64, "(config-%s)", config_desc);
+			cli_set_modestring(cli, string);
+		}
+		else
+		{
+			cli_set_modestring(cli, "(config)");
+		}
 	}
-	if (config_desc && *config_desc)
-	{
-		char string[64];
-		snprintf(string, 64, "(config-%s)", config_desc);
-		cli_set_modestring(cli, string);
-	}
-	else
-	{
-		cli_set_modestring(cli, "(config)");
-	}
+
+	return old;
 }
 
 int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
@@ -257,6 +258,7 @@ int cli_unregister_command(struct cli_def *cli, char *command)
 				p->next = c->next;
 			else
 				cli->commands = c->next;
+
 			free(c->command);
 			free(c);
 			return CLI_OK;
@@ -356,7 +358,9 @@ struct cli_def *cli_init()
 	struct cli_def *cli;
 	struct cli_command *c;
 
-	if (!(cli = calloc(sizeof(struct cli_def), 1))) return cli;
+	if (!(cli = calloc(sizeof(struct cli_def), 1)))
+		return NULL;
+
 	cli_register_command(cli, NULL, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
 	cli_register_command(cli, NULL, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
 	cli_register_command(cli, NULL, "logout", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
@@ -369,6 +373,8 @@ struct cli_def *cli_init()
 	cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Configure from the terminal");
 
 	cli_register_command(cli, NULL, "exit", cli_int_exit_conf, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Exit from configure mode");
+
+	cli->privilege = cli->mode = -1;
 	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
 	cli_set_configmode(cli, MODE_EXEC, NULL);
 	return cli;
@@ -737,10 +743,13 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 					case STATE_ENABLE:
 						if (cli->modestring)
 							snprintf(cliprompt, 64, "%s%s%s ",
-								cli->hostname, cli->modestring, cli->promptchar);
+								cli->hostname ? cli->hostname : "",
+								cli->modestring, cli->promptchar);
 						else
 							snprintf(cliprompt, 64, "%s%s ",
-								cli->hostname, cli->promptchar);
+								cli->hostname ? cli->hostname : "",
+								cli->promptchar);
+
 						write(sockfd, cliprompt, strlen(cliprompt));
 						write(sockfd, cmd, l);
 						if (cursor < l)
@@ -978,7 +987,9 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 
 				if (cursor != l) continue;
 
-				if (l > 0) num_completions = cli_get_completions(cmd, completions, 128);
+				if (l > 0)
+					num_completions = cli_get_completions(cmd, completions, 128);
+
 				if (num_completions == 0)
 				{
 					write(sockfd, "\a", 1);
@@ -1273,6 +1284,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		int i;
 		for (i = 0; i < MAX_HISTORY; i++)
 			if (cli->history[i]) free(cli->history[i]);
+
 		if (username) free(username);
 		if (password) free(password);
 		if (cmd) free(cmd);
@@ -1282,32 +1294,46 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	return CLI_OK;
 }
 
-int cli_file(struct cli_def *cli, FILE *fh, int privilege)
+int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode)
 {
-	char *cmd;
-
-	cmd = malloc(4096);
-	cli->client = NULL;
-	cli->privilege = privilege;
+	int oldpriv = cli_set_privilege(cli, privilege);
+	int oldmode = cli_set_configmode(cli, mode, NULL);
+	char buf[4096];
 
 	while (1)
 	{
 		char *p;
+		char *cmd;
+		char *end;
 
-		if (fgets(cmd, 4095, fh) <= 0)
+		if (fgets(buf, sizeof(buf), fh) <= 0)
 			break; // End of file
 
-		if ((p = strchr(cmd, '#'))) *p = 0;
+		if ((p = strpbrk(buf, "#!\r\n")))
+			*p = 0;
 
+		cmd = buf;
+		while (isspace(*cmd))
+			cmd++;
+
+		if (!*cmd)
+			continue;
+
+		for (p = end = cmd; *p; p++)
+			if (!isspace(*p))
+				end = p;
+
+		*++end = 0;
 		if (strcasecmp(cmd, "quit") == 0)
 			break;
-
-		if (strlen(cmd) == 0)
-			continue;
 
 		if (cli_run_command(cli, cmd) == CLI_QUIT)
 			break;
 	}
+
+	cli_set_privilege(cli, oldpriv);
+	cli_set_configmode(cli, oldmode, NULL /* didn't save desc */);
+
 	return CLI_OK;
 }
 
@@ -1479,4 +1505,3 @@ void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, 
 {
 	cli->print_callback = callback;
 }
-
