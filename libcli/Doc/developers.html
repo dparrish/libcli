@@ -351,8 +351,8 @@ Enables or disables callback based authentication.
 required on connection.  <EM>auth_callback</EM> will be called with the
 <EM>username</EM> and <EM>password</EM> that the user enters.  </P>
 
-<P><EM>auth_callback</EM> must return <EM>CLI_OK</EM> if authentication
-is successful, and <EM>CLI_ERROR</EM> if not.  </P>
+<P><EM>auth_callback</EM> must return a non-zero value if authentication
+is successful.  </P>
 
 <P> If <EM>auth_callback</EM> is NULL, then callback based authentication
 will be disabled.  </P>
