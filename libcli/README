@@ -95,10 +95,10 @@ You can use this to build dynamic command trees.
 
 
 
-You are responsible for accepting a TCP connection, and for creating
-a process or thread to run the cli. Once you are ready to process the
-connection, call cli_loop(sock, "cli>"), where sock is the socket of the
-connection, and "cli>" is the prompt you wish to give your users.
+You are responsible for accepting a TCP connection, and for creating a
+process or thread to run the cli.  Once you are ready to process the
+connection, call cli_loop(cli, sock) to interact with the user on the
+given socket.
 
 This function will return when the user exits the cli, either by breaking the
 connection or entering "quit".
