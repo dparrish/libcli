@@ -77,7 +77,7 @@ int cli_set_privilege(struct cli_def *cli, int privilege);
 int cli_set_configmode(struct cli_def *cli, int mode, char *config_desc);
 void cli_reprompt(struct cli_def *cli);
 void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli));
-void cli_print(struct cli_def *cli, char *format, ...);
+void cli_print(struct cli_def *cli, char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *));
 
 #endif
