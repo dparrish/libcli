@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <memory.h>
 #include <malloc.h>
