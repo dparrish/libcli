@@ -274,7 +274,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
 		if (p->command && p->callback && cli->privilege >= p->privilege &&
 				(p->mode == cli->mode || p->mode == MODE_ANY))
 		{
-			cli_print(cli, "%-20s%s", cli_command_name(cli, p), p->help ? : "");
+			cli_print(cli, "  %-20s %s", cli_command_name(cli, p), p->help ? : "");
 		}
 		if (p->children)
 		{
@@ -286,6 +286,10 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
 
 int cli_int_enable(struct cli_def *cli, char * command, char *argv[], int argc)
 {
+
+	if (cli->privilege == PRIVILEGE_PRIVILEGED)
+		return CLI_OK;
+
 	if (!cli->enable_password && !cli->enable_callback)
 	{
 		// No password required, set privilege immediately
@@ -342,7 +346,6 @@ int cli_int_configure_terminal(struct cli_def *cli, char *command, char *argv[],
 
 int cli_int_exit_conf(struct cli_def *cli, char *command, char *argv[], int argc)
 {
-	cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
 	cli_set_configmode(cli, MODE_EXEC, NULL);
 	return CLI_OK;
 }
@@ -360,7 +363,6 @@ struct cli_def *cli_init()
 	cli_register_command(cli, NULL, "history", cli_int_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show a list of previously run commands");
 	cli_register_command(cli, NULL, "enable", cli_int_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Turn on privileged commands");
 	cli_register_command(cli, NULL, "disable", cli_int_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Turn off privileged commands");
-	cli_register_command(cli, NULL, "exit", cli_int_quit, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Exit from the EXEC");
 
 	c = cli_register_command(cli, NULL, "configure", NULL, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
 	cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Configure from the terminal");
@@ -511,7 +513,7 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 		{
 			if (strncasecmp(c->command, words[start_word], l) == 0 && (c->callback || c->children) && cli->privilege >= c->privilege && (c->mode == cli->mode || c->mode == MODE_ANY))
 			{
-				fprintf(cli->client, "%-20s%s\r\n", c->command, c->help ? : "");
+				fprintf(cli->client, "  %-20s %s\r\n", c->command, c->help ? : "");
 			}
 		}
 
@@ -704,7 +706,9 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			fd_set r;
 			if (cli->showprompt)
 			{
-				write(sockfd, "\r\n", 2);
+				if (cli->state != STATE_ENABLE_PASSWORD)
+					write(sockfd, "\r\n", 2);
+
 				switch (cli->state)
 				{
 					case STATE_LOGIN:
@@ -828,7 +832,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			if (c == '\n') continue;
 			if (c == '\r') {
 				if ((cli->state == STATE_NORMAL) || (cli->state == STATE_ENABLE))
-					write(sockfd, "\r", 1);
+					write(sockfd, "\r\n", 2);
 				break;
 			}
 
@@ -945,7 +949,6 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			if (c == CTRL('Z') && cli->state == STATE_ENABLE)
 			{
 				cli_clear_line(sockfd, cmd, l, cursor);
-				cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
 				cli_set_configmode(cli, MODE_EXEC, NULL);
 				cli->showprompt = 1;
 				continue;
@@ -1112,7 +1115,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 				}
 				else
 				{
-					write(sockfd, "", 1);
+					write(sockfd, "\a", 1);
 					continue;
 				}
 			}
