@@ -1145,7 +1145,7 @@ int cli_filter_inc(struct cli_def *cli, char *string, char *params[], int num_pa
 	if (!string)
 		return CLI_OK;
 
-	for (i = 0; i < num_params; i++)
+	for (i = 1; i < num_params; i++)
 	{
 		if (strstr(string, params[i]) != NULL)
 		{
