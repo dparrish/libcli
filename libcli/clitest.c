@@ -8,7 +8,7 @@
 
 #define CLITEST_PORT		8000
 
-int cmd_test(FILE *client, char *command, char *argv[], int argc)
+int cmd_test(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
 {
     int i;
     fprintf(client, "called %s with \"%s\"\r\n", __FUNCTION__, command);
@@ -20,7 +20,7 @@ int cmd_test(FILE *client, char *command, char *argv[], int argc)
     return CLI_OK;
 }
 
-int cmd_set(FILE *client, char *command, char *argv[], int argc)
+int cmd_set(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
 {
     if (argc < 2)
     {
@@ -41,22 +41,23 @@ int check_auth(char *username, char *password)
 int main(int argc, char *argv[])
 {
     struct cli_command *c;
+    struct cli_def *cli;
     int s, x;
     struct sockaddr_in servaddr;
     int on = 1;
 
-    cli_init();
-    cli_set_banner("libcli test environment");
-    cli_register_command(NULL, "test", cmd_test, NULL);
-    cli_register_command(NULL, "sex", NULL, NULL);
-    cli_register_command(NULL, "simple", NULL, NULL);
-    cli_register_command(NULL, "simon", NULL, NULL);
-    cli_register_command(NULL, "set", cmd_set, NULL);
-    c = cli_register_command(NULL, "show", NULL, NULL);
-    cli_register_command(c, "counters", cmd_test, "Show the counters that the system uses");
-    cli_register_command(c, "junk", cmd_test, NULL);
+    cli = cli_init();
+    cli_set_banner(cli, "libcli test environment");
+    cli_register_command(cli, NULL, "test", cmd_test, NULL);
+    cli_register_command(cli, NULL, "sex", NULL, NULL);
+    cli_register_command(cli, NULL, "simple", NULL, NULL);
+    cli_register_command(cli, NULL, "simon", NULL, NULL);
+    cli_register_command(cli, NULL, "set", cmd_set, NULL);
+    c = cli_register_command(cli, NULL, "show", NULL, NULL);
+    cli_register_command(cli, c, "counters", cmd_test, "Show the counters that the system uses");
+    cli_register_command(cli, c, "junk", cmd_test, NULL);
 
-    cli_set_auth_callback(check_auth);
+    cli_set_auth_callback(cli, check_auth);
 
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
@@ -83,11 +84,11 @@ int main(int argc, char *argv[])
 
     while ((x = accept(s, NULL, 0)))
     {
-	cli_loop(x, "cli> ");
+	cli_loop(cli, x, "cli> ");
 	close(x);
     }
 
-    cli_done();
+    cli_done(cli);
     return 0;
 }
 

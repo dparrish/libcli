@@ -81,32 +81,33 @@ int main(int argc, char *argv[])
 {
 	struct sockaddr_in servaddr;
 	struct cli_command *c;
+	struct cli_def *cli;
 	int on = 1, x, s;
 
 	<FONT COLOR=blue>// Must be called first to setup data structures</FONT>
-	cli_init();
+	cli = cli_init();
 
 	<FONT COLOR=blue>// Set the greeting</FONT>
-	cli_set_banner("Welcome to the CLI test program.");
+	cli_set_banner(cli, "Welcome to the CLI test program.");
 
 	<FONT COLOR=blue>// Enable 2 username / password combinations</FONT>
-	cli_allow_user("fred", "nerk");
-	cli_allow_user("foo", "bar");
+	cli_allow_user(cli, "fred", "nerk");
+	cli_allow_user(cli, "foo", "bar");
 
 	<FONT COLOR=blue>// Set up a few simple one-level commands</FONT>
-	cli_register_command(NULL, "test", cmd_test, NULL);
-	cli_register_command(NULL, "simple", cmd_test, NULL);
-	cli_register_command(NULL, "simon", NULL, NULL);
+	cli_register_command(cli, NULL, "test", cmd_test, NULL);
+	cli_register_command(cli, NULL, "simple", cmd_test, NULL);
+	cli_register_command(cli, NULL, "simon", NULL, NULL);
 
 	<FONT COLOR=blue>// This command takes arguments</FONT>
-	cli_register_command(NULL, "set", cmd_set, NULL);
+	cli_register_command(cli, NULL, "set", cmd_set, NULL);
 
 	<FONT COLOR=blue>// Set up 2 commands "show counters" and "show junk"</FONT>
-	c = cli_register_command(NULL, "show", NULL, NULL);
+	c = cli_register_command(cli, NULL, "show", NULL, NULL);
 	<FONT COLOR=blue>// Note how we store the previous command and use it as the parent for this one.</FONT>
-	cli_register_command(c, "junk", cmd_test, NULL);
+	cli_register_command(cli, c, "junk", cmd_test, NULL);
 	<FONT COLOR=blue>// This one has some help text</FONT>
-	cli_register_command(c, "counters", cmd_test, "Show the counters that the system uses");
+	cli_register_command(cli, c, "counters", cmd_test, "Show the counters that the system uses");
 
 	<FONT COLOR=blue>// Create a socket</FONT>
 	s = socket(AF_INET, SOCK_STREAM, 0);
@@ -125,9 +126,12 @@ int main(int argc, char *argv[])
 	while ((x = accept(s, NULL, 0)))
 	{
 		<FONT COLOR=blue>// Pass the connection off to libcli</FONT>
-		cli_loop(x, "cli&gt; ");
+		cli_loop(cli, x, "cli&gt; ");
 		close(x);
 	}
+
+	<FONT COLOR=blue>// Free data structures</FONT>
+	cli_done(cli);
 
 	return 0;
 }
@@ -162,14 +166,14 @@ Also, the standard libcli commands <EM>help</EM>, <EM>exit</EM>, <EM>logout</EM>
 <LI>
 Make this program complete by adding the callback functions.
 <PRE>
-int cmd_test(FILE *client, char *command, char *argv[], int argc)
+int cmd_test(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
 {
     int i;
     fprintf(client, "called %s with %s\r\n", __FUNCTION__, command);
     return CLI_OK;
 }
 
-int cmd_set(FILE *client, char *command, char *argv[], int argc)
+int cmd_set(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
 {
     if (argc &lt; 2)
     {
@@ -227,14 +231,19 @@ This must be called before any other cli_<EM>xxx</EM> function. It sets
 up the internal data structures used for command-line processing.
 </P>
 
-<H3><A NAME="cli_done">4.2 cli_done()</A></H3>
+<P>
+Returns a <CODE>struct cli_def *</CODE> which must be passed to all
+other cli_<EM>xxx</EM> functions.
+</P>
+
+<H3><A NAME="cli_done">4.2 cli_done(<EM>struct cli_def *cli</EM>)</A></H3>
 
 <P>
 This is optional, but it's a good idea to call this when you are finished
 with libcli. This frees memory used by libcli.
 </P>
 
-<H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_command *parent, char *command, int (*callback)(FILE *, char *, char **, int), char *help</EM>)</A></H3>
+<H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(FILE *, char *, char **, int), char *help</EM>)</A></H3>
 
 <P>
 Add a command to the internal command tree. Returns a <EM>struct cli_command *</EM>, which you can pass as <EM>parent</EM> to another call to <EM>cli_register_command</EM>.
@@ -259,14 +268,14 @@ commands.</P>
 <P>If <EM>help</EM> is provided, it is given to the user when the use
 the <EM>help</EM> command or press <B>?</B>.</P>
 
-<H3><A NAME="cli_unregister_command">4.4 cli_unregister_command(<EM>char *command</EM>)</A></H3>
+<H3><A NAME="cli_unregister_command">4.4 cli_unregister_command(<EM>struct cli_def *cli, char *command</EM>)</A></H3>
 
 <P>
 Remove a command <EM>command</EM> and all children. There is not provision
 yet for removing commands at lower than the top level.
 </P>
 
-<H3><A NAME="cli_loop">4.5 cli_loop(<EM>int sockfd, char *prompt</EM>)</A></H3>
+<H3><A NAME="cli_loop">4.5 cli_loop(<EM>struct cli_def *cli, int sockfd, char *prompt</EM>)</A></H3>
 
 <P>
 The main loop of the command-line environment. This must be called with
@@ -284,7 +293,7 @@ client disconnect.
 Returns <EM>CLI_OK</EM>.
 </P>
 
-<H3><A NAME="cli_set_auth_callback">4.6 cli_set_auth_callback(<EM>int (*auth_callback)(char *, char *)</EM>)</A></H3>
+<H3><A NAME="cli_set_auth_callback">4.6 cli_set_auth_callback(<EM>struct cli_def *cli, int (*auth_callback)(char *, char *)</EM>)</A></H3>
 
 <P>
 Enables or disables callback based authentication.
@@ -300,7 +309,7 @@ is successful, and <EM>CLI_ERROR</EM> if not.  </P>
 <P> If <EM>auth_callback</EM> is NULL, then callback based authentication
 will be disabled.  </P>
 
-<H3><A NAME="cli_allow_user">4.7 cli_allow_user(<EM>char *username, char *password</EM>)</A></H3>
+<H3><A NAME="cli_allow_user">4.7 cli_allow_user(<EM>struct cli_def *cli, char *username, char *password</EM>)</A></H3>
 
 <P> Enables internal authentication, and adds <EM>username/password</EM>
 to the list of allowed users.  <P>
@@ -308,7 +317,7 @@ to the list of allowed users.  <P>
 <P> The internal list of users will be checked before callback based
 authentication is tried.  </P>
 
-<H3><A NAME="cli_deny_user">4.8 cli_deny_user(<EM>char *username</EM>)</A></H3>
+<H3><A NAME="cli_deny_user">4.8 cli_deny_user(<EM>struct cli_def *cli, char *username</EM>)</A></H3>
 
 <P>
 Removes <EM>username/password</EM> from the list of allowed users.
@@ -317,7 +326,7 @@ Removes <EM>username/password</EM> from the list of allowed users.
 <P> If this is the last combination in the list, then internal
 authentication will be disabled.  </P>
 
-<H3><A NAME="cli_set_banner">4.9 cli_set_banner(<EM>char *banner</EM>)</A></H3>
+<H3><A NAME="cli_set_banner">4.9 cli_set_banner(<EM>struct cli_def *cli, char *banner</EM>)</A></H3>
 
 <P>
 Sets the greeting that clients will be presented with when they
