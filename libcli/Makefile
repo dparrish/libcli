@@ -1,6 +1,6 @@
 MAJOR=1
-MINOR=0
-REVISION=1
+MINOR=1
+REVISION=0
 FILENAME=libcli.so.$(MAJOR).$(MINOR).$(REVISION)
 
 PREFIX?=/usr/local
@@ -14,12 +14,13 @@ all:	libcli.so clitest
 
 libcli.so: libcli.o
 	$(CC) -o $(FILENAME) $^ $(LDFLAGS) $(LIBS)
-	ln -s $(FILENAME) libcli.so
+	if [ -f $@ ]; then rm -f $@; fi
+	ln -s $(FILENAME) $@
 
 %.o: %.c
 	$(CC) -fPIC -o $@ -c $^ $(CFLAGS) $(INCLUDE_PATH)
 
-clitest: clitest.o
+clitest: clitest.o $(FILENAME)
 	$(CC) $(CFLAGS) -o $@ $^ -L. -lcli
 
 clean:
