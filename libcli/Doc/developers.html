@@ -22,6 +22,7 @@
 		<LI><A HREF="#cli_allow_user">cli_allow_user()</A></LI>
 		<LI><A HREF="#cli_deny_user">cli_deny_user()</A></LI>
 		<LI><A HREF="#cli_set_banner">cli_set_banner()</A></LI>
+		<LI><A HREF="#cli_regular">cli_regular()</A></LI>
 	</OL>
 </OL>
 
@@ -335,6 +336,23 @@ connect. This may be a security warning for example.
 
 <P>
 If <EM>banner</EM> is NULL, then no banner will be presented (the default).
+</P>
+
+<H3><A NAME="cli_regular">4.10 cli_regular(<EM>struct cli_def *cli, int(*callback)(struct cli_def *, FILE *)</EM>)</A></H3>
+
+<P>
+Adds a callback function which will be called every second that a user
+is connected to the cli. This can be used for regular processing such
+as debugging, time counting or implementing idle timeouts.
+</P>
+
+<P>
+Pass NULL as the callback function to disable this at runtime.
+</P>
+
+<P>
+If the callback function does not return CLI_OK, then the user will
+be disconnected.
 </P>
 
 <SMALL>David Parrish &lt;david@dparrish.com&gt; 2003-04-23</SMALL>

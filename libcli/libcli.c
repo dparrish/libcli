@@ -457,6 +457,18 @@ void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
     l = cursor = 0;
 }
 
+void cli_reprompt(struct cli_def *cli)
+{
+    if (!cli) return;
+    cli->showprompt = 1;
+}
+
+void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli, FILE *))
+{
+    if (!cli) return;
+    cli->regular_callback = callback;
+}
+
 int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 {
     int n;
@@ -486,18 +498,19 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	fprintf(client, "%s\r\n", cli->banner);
 
     if (!cli->users && !cli->auth_callback) state = 2;
+    cli->showprompt = 1;
 
     while (1)
     {
 	signed int in_history = 0;
 	int lastchar = 0;
-	int showit = 1;
+	struct timeval tm;
 
 	if (oldcmd)
 	{
 	    l = cursor = oldl;
 	    oldcmd[l] = 0;
-	    showit = 1;
+	    cli->showprompt = 1;
 	    oldcmd = NULL;
 	    oldl = 0;
 	}
@@ -508,10 +521,15 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	    cursor = 0;
 	}
 
+	tm.tv_sec = 1;
+	tm.tv_usec = 0;
+
 	while (1)
 	{
+	    int sr;
+	    fd_set r;
 
-	    if (showit)
+	    if (cli->showprompt)
 	    {
 		write(sockfd, "\r\n", 2);
 		switch (state)
@@ -524,9 +542,29 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			    write(sockfd, cmd, l);
 			    break;
 		}
-		showit = 0;
+		cli->showprompt = 0;
 	    }
 
+	    FD_ZERO(&r);
+	    FD_SET(sockfd, &r);
+
+	    if ((sr = select(sockfd + 1, &r, NULL, NULL, &tm)) < 0)
+	    {
+		// Select Error
+		if (errno == EINTR) continue;
+		perror("read");
+		l = -1;
+		break;
+	    }
+	    if (sr == 0)
+	    {
+		// Timeout every second
+		if (cli->regular_callback && cli->regular_callback(cli, client) != CLI_OK)
+		    break;
+		tm.tv_sec = 1;
+		tm.tv_usec = 0;
+		continue;
+	    }
 	    if ((n = read(sockfd, &c, 1)) < 0)
 	    {
 		if (errno == EINTR) continue;
@@ -756,7 +794,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 			    write(sockfd, "	", 1);
 		    }
 		    if (i % 4 != 3) write(sockfd, "\r\n", 2);
-		    showit = 1;
+		    cli->showprompt = 1;
 		}
 		else
 		{
@@ -826,7 +864,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	    if (username) free(username);
 	    username = strdup(cmd);
 	    state++;
-	    showit = 1;
+	    cli->showprompt = 1;
 	}
 	else if (state == 1)
 	{
@@ -869,7 +907,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		free(password); password = NULL;
 		state = 0;
 	    }
-	    showit = 1;
+	    cli->showprompt = 1;
 	}
 	else
 	{

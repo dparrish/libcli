@@ -1,4 +1,4 @@
-Version: 1.1.1
+Version: 1.2.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -39,6 +39,9 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Fri Jul 25 2003 David Parrish <david@dparrish.com>
+- Add cli_regular to enable regular processing while cli is connected
+
 * Wed Jun 25 2003 David Parrish <david@dparrish.com>
 - Stop random stack smashing in cli_command_name.
 - Stop memory leak by allocating static variable in cli_command_name.
