@@ -9,9 +9,26 @@
 
 #define MAX_HISTORY 256
 
+struct unp
+{
+    char *username;
+    char *password;
+    struct unp *next;
+};
+
+struct cli_def
+{
+    int completion_callback;
+    struct cli_command *commands;
+    int (*auth_callback)(char *, char *);
+    char *banner;
+    struct unp *users;
+};
+
 struct cli_def cli = {0};
 FILE *cli_client = NULL;
 char *cli_history[MAX_HISTORY];
+int cli_run_command(char *command);
 
 char *cli_command_name(struct cli_command *command)
 {

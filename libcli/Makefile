@@ -14,7 +14,7 @@ LIBPATH+= -L.
 all:	libcli.so clitest
 
 libcli.so: libcli.o
-	$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
+	$(CC) -o $(FILENAME) $^ $(LDFLAGS) $(LIBS)
 	ln -s $(FILENAME) libcli.so
 
 %.o: %.c
