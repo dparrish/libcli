@@ -1,4 +1,4 @@
-Version: 1.4.0
+Version: 1.4.1
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
