@@ -1,7 +1,7 @@
-Version: 1.8.0
+Version: 1.8.1
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 2
+Release: 1
 Copyright: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -39,7 +39,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
-* Mon Jul 12 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.0-2
+* Mon Jul 12 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.1-1
 - Documentation update.
 - Allow NULL or "" to be passed to cli_set_banner() and
   cli_set_hostname() to clear a previous value.
