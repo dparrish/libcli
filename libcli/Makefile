@@ -1,6 +1,6 @@
 MAJOR=1
 MINOR=0
-REVISION=0
+REVISION=1
 FILENAME=libcli.so.$(MAJOR).$(MINOR).$(REVISION)
 
 PREFIX?=/usr/local
@@ -29,3 +29,9 @@ install:
 	install -D -g root -m 0755 $(FILENAME) $(PREFIX)/lib/$(FILENAME)
 	install -D -g root -m 0644 libcli.h $(PREFIX)/include/libcli.h
 
+rpm:
+	mkdir libcli-$(MAJOR).$(MINOR).$(REVISION)
+	cp -R *.c *.h Makefile Doc README *.spec libcli-$(MAJOR).$(MINOR).$(REVISION)
+	tar zcvf libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --exclude CVS --exclude *.tar.gz libcli-$(MAJOR).$(MINOR).$(REVISION)
+	rm -rf libcli-$(MAJOR).$(MINOR).$(REVISION)
+	rpm -ta libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --clean

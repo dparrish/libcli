@@ -1,0 +1,84 @@
+<HTML>
+<HEAD>
+<TITLE>libcli User's Guide</TITLE>
+</HEAD>
+<BODY>
+
+<H1>libcli User's Guide</H1>
+
+<H2><A NAME="TOC">Table of Contents</A></H2>
+<OL>
+<LI><A HREF="#Introduction">Introduction</A></LI>
+<LI><A HREF="#history">History</A></LI>
+<LI><A HREF="#editing">Command-Line Editing</A></LI>
+</OL>
+
+<H2><A NAME="Introduction">Introduction</A></H2>
+
+<P>
+libcli provides a consistant command-line environment for remote clients,
+with a few common features between every implemtation.
+</P>
+
+<P>
+The library is not accessed by itself, rather the software which uses
+it listens on a defined port for a Telnet connection. This connection
+is handed off to libcli for processing.
+</P>
+
+<P>
+The first thing that libcli does is the Telnet negotiation necessary to
+establish a character mode session, rather than the Telnet default of
+a line mode session. This is to enable command-line editing, completion
+and history.
+</P>
+
+<P>
+A libcli implementation may require authentication before giving you
+access to the environment. If so, a <EM>Username:</EM> prompt will be
+issued. Enter the username you have been given, and a <EM>Password:</EM>
+prompt will appear. The characters you enter for your password will not
+be echoed.
+</P>
+
+<P>
+To leave any libcli command-line environment, enter the command
+"<EM>quit</EM>" (aliases are <EM>exit</EM> and <EM>logout</EM>), hit
+Ctrl-D, or simply break the connection.
+</P>
+
+<H2><A NAME="history">History</A></H2>
+
+<P>
+libcli keeps track of the last 256 commands you entered in the session. To
+search back through the history, use the up and down arrow keys. The Up
+arrow selects the previous command.
+<P>
+
+<P>
+You can also enter "<EM>history</EM>" to get a list of all the commands
+in the history.
+</P>
+
+<H2><A NAME="editing">Command-Line Editing</A></H2>
+
+<P>
+You can edit the command currently at the prompt:
+<LI>Left &amp; Right arrows move the cursor around on the line.</LI>
+<LI>Ctrl-U clears the line</LI>
+
+<P>
+After changing the line and hitting enter, the new command line will be
+added to the end of the history.
+</P>
+
+<P>
+If you don't remember the command name that you want, you can press
+? at any time to get a list of available commands. If you enter ? when
+you are half-way through entering a word, you will get a list of all
+commands which match what you have already entered.
+</P>
+
+<SMALL>David Parrish &lt;david@dparrish.com&gt; 2003-04-23</SMALL>
+</BODY>
+</HTML>

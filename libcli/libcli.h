@@ -5,6 +5,8 @@
 #define CLI_ERROR	-1
 #define CLI_QUIT	-2
 
+#include <stdio.h>
+
 struct cli_command
 {
     char *command;
