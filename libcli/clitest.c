@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 	    {
 		    // This sets a callback which just displays the cli_print() text to stdout
 		    cli_print_callback(cli, pc);
-		    cli_file(cli, fh, PRIVILEGE_UNPRIVILEGED);
+		    cli_file(cli, fh, PRIVILEGE_UNPRIVILEGED, MODE_EXEC);
 		    cli_print_callback(cli, NULL);
 		    fclose(fh);
 	    }
