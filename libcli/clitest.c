@@ -11,11 +11,11 @@
 int cmd_test(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
 {
     int i;
-    fprintf(client, "called %s with \"%s\"\r\n", __FUNCTION__, command);
-    fprintf(client, "%d arguments:\r\n", argc);
+    cli_print(cli, client, "called %s with \"%s\"\r\n", __FUNCTION__, command);
+    cli_print(cli, client, "%d arguments:\r\n", argc);
     for (i = 0; i < argc; i++)
     {
-	fprintf(client, "	%s\r\n", argv[i]);
+	cli_print(cli, client, "	%s\r\n", argv[i]);
     }
     return CLI_OK;
 }
@@ -24,10 +24,10 @@ int cmd_set(struct cli_def *cli, FILE *client, char *command, char *argv[], int 
 {
     if (argc < 2)
     {
-	fprintf(client, "Specify a variable to set\r\n");
+	cli_print(cli, client, "Specify a variable to set\r\n");
 	return CLI_OK;
     }
-    fprintf(client, "Setting \"%s\" to \"%s\"\r\n", argv[0], argv[1]);
+    cli_print(cli, client, "Setting \"%s\" to \"%s\"\r\n", argv[0], argv[1]);
     return CLI_OK;
 }
 
@@ -82,6 +82,7 @@ int main(int argc, char *argv[])
 	return 1;
     }
 
+    printf("Listening on port %d\n", CLITEST_PORT);
     while ((x = accept(s, NULL, 0)))
     {
 	cli_loop(cli, x, "cli> ");

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -16,6 +17,9 @@ struct unp
 };
 
 int cli_run_command(struct cli_def *cli, FILE *client, char *command);
+int cli_filter_inc(struct cli_def *cli, char *string, char *params[], int num_params);
+int cli_filter_begin(struct cli_def *cli, char *string, char *params[], int num_params);
+int cli_filter_between(struct cli_def *cli, char *string, char *params[], int num_params);
 
 char *cli_command_name(struct cli_def *cli, struct cli_command *command)
 {
@@ -361,7 +365,7 @@ int cli_parse_line(char *line, char *words[], int max_words)
 	return word_counter;
 }
 
-int cli_find_command(struct cli_def *cli, FILE *client, struct cli_command *commands, int num_words, char *words[], int start_word)
+int cli_find_command(struct cli_def *cli, FILE *client, struct cli_command *commands, int num_words, char *words[], int start_word, int filter_words, char *filter[])
 {
     struct cli_command *c;
 
@@ -386,6 +390,8 @@ int cli_find_command(struct cli_def *cli, FILE *client, struct cli_command *comm
     {
 	if (strncasecmp(c->command, words[start_word], c->unique_len) == 0 && strncasecmp(c->command, words[start_word], strlen(words[start_word])) == 0)
 	{
+	    int rc;
+
 	    // Found a word!
 	    if (!c->children)
 	    {
@@ -403,7 +409,7 @@ int cli_find_command(struct cli_def *cli, FILE *client, struct cli_command *comm
 		    fprintf(client, "Incomplete command\r\n");
 		    return CLI_ERROR;
 		}
-		return cli_find_command(cli, client, c->children, num_words, words, start_word + 1);
+		return cli_find_command(cli, client, c->children, num_words, words, start_word + 1, filter_words, filter);
 	    }
 
 	    if (!c->callback)
@@ -411,7 +417,21 @@ int cli_find_command(struct cli_def *cli, FILE *client, struct cli_command *comm
 		fprintf(client, "Internal server error processing \"%s\"\r\n", cli_command_name(cli, c));
 		return CLI_ERROR;
 	    }
-	    return c->callback(cli, client, cli_command_name(cli, c), words + start_word + 1, num_words - start_word - 1);
+	    if (filter_words)
+	    {
+		if (strcasecmp(filter[0], "inc") == 0)
+		    cli_add_filter(cli, cli_filter_inc, filter, filter_words);
+		else if (strcasecmp(filter[0], "begin") == 0)
+		    cli_add_filter(cli, cli_filter_begin, &filter[1], filter_words - 1);
+		else if (strcasecmp(filter[0], "between") == 0)
+		    cli_add_filter(cli, cli_filter_between, &filter[1], filter_words - 1);
+	    }
+	    rc = c->callback(cli, client, cli_command_name(cli, c), words + start_word + 1, num_words - start_word - 1);
+	    if (filter_words)
+	    {
+		cli_clear_filter(cli);
+	    }
+	    return rc;
 	}
     }
     fprintf(client, "Invalid command \"%s\"\r\n", words[start_word]);
@@ -422,17 +442,30 @@ int cli_run_command(struct cli_def *cli, FILE *client, char *command)
 {
     int num_words, r, i;
     char *words[128] = {0};
+    char *filter[128] = {0};
+    int filter_words = 0;
+    char *p;
 
     if (!command) return CLI_ERROR;
     command = cli_trim_trailing(cli_trim_leading(command));
     if (!*command) return CLI_OK;
 
+    if ((p = strchr(command, '|')))
+    {
+	*p++ = 0;
+	command = cli_trim_trailing(command);
+	p = cli_trim_leading(p);
+	filter_words = cli_parse_line(p, filter, 128);
+    }
+
     num_words = cli_parse_line(command, words, 128);
     if (!num_words) return CLI_ERROR;
 
-    r = cli_find_command(cli, client, cli->commands, num_words, words, 0);
+    r = cli_find_command(cli, client, cli->commands, num_words, words, 0, filter_words, filter);
     for (i = 0; i < num_words; i++)
 	free(words[i]);
+    for (i = 0; i < filter_words; i++)
+	free(filter[i]);
 
     if (r == CLI_QUIT)
 	return r;
@@ -929,5 +962,134 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
     }
 
     return CLI_OK;
+}
+
+void cli_print(struct cli_def *cli, FILE *client, char *format, ...)
+{
+    static char *buffer = NULL;
+    static int size = 4096;
+    va_list ap;
+
+    if (!buffer)
+	if (!(buffer = malloc(size)))
+	    return;
+
+    while (1)
+    {
+	int n;
+
+	va_start(ap, format);
+	n = vsnprintf(buffer, size, format, ap);
+	va_end(ap);
+
+	/* If that worked, test and send the string. */
+	if (n > -1 && n < size)
+	{
+	    int sendit = CLI_OK;
+	    if (cli->filter)
+		sendit = cli->filter(cli, buffer, cli->filter_param_s, cli->filter_param_i);
+	    if (sendit == CLI_OK)
+		fprintf(client, buffer);
+	    return;
+	}
+
+	/* Else try again with more space. */
+	size *= 2;
+	if ((buffer = realloc(buffer, size)) == NULL)
+	    return;
+    }
+    return;
+}
+
+void cli_add_filter(struct cli_def *cli, int (*filter)(struct cli_def *, char *, char **, int), char *params[], int num_params)
+{
+    cli->filter = filter;
+    cli->filter_param_s = params;
+    cli->filter_param_i = num_params;
+    cli->filter_data = NULL;
+}
+
+void cli_clear_filter(struct cli_def *cli)
+{
+    cli->filter = NULL;
+    cli->filter_param_s = NULL;
+    cli->filter_param_i = 0;
+    cli->filter_data = NULL;
+}
+
+int cli_filter_inc(struct cli_def *cli, char *string, char *params[], int num_params)
+{
+    int i;
+
+    // Don't use this unless something is specified
+    if (num_params < 1)
+	return CLI_OK;
+
+    for (i = 0; i < num_params; i++)
+    {
+	if (strstr(string, params[i]) != NULL)
+	{
+	    return CLI_OK;
+	}
+    }
+
+    return CLI_ERROR;
+}
+
+int cli_filter_begin(struct cli_def *cli, char *string, char *params[], int num_params)
+{
+    static int started;
+
+    if (!cli->filter_data)
+    {
+	started = 0;
+	cli->filter_data = &started;
+    }
+
+    if (started)
+	return CLI_OK;
+
+    // Don't use this unless something is specified
+    if (num_params != 1)
+	return CLI_OK;
+
+    if (strstr(string, params[0]) != NULL)
+    {
+	started = 1;
+	return CLI_OK;
+    }
+
+    return CLI_ERROR;
+}
+
+int cli_filter_between(struct cli_def *cli, char *string, char *params[], int num_params)
+{
+    static int started;
+
+    if (!cli->filter_data)
+    {
+	started = 0;
+	cli->filter_data = &started;
+    }
+
+    if (num_params != 2)
+	return CLI_OK;
+
+    if (!started)
+    {
+	if (strstr(string, params[0]) != NULL)
+	{
+	    started = 1;
+	    return CLI_OK;
+	}
+    }
+    else
+    {
+	if (strstr(string, params[1]) != NULL)
+	    started = 0;
+	return CLI_OK;
+    }
+
+    return CLI_ERROR;
 }
 

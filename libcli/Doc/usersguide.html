@@ -11,6 +11,7 @@
 <LI><A HREF="#Introduction">Introduction</A></LI>
 <LI><A HREF="#history">History</A></LI>
 <LI><A HREF="#editing">Command-Line Editing</A></LI>
+<LI><A HREF="#filters">Filters</A></LI>
 </OL>
 
 <H2><A NAME="Introduction">Introduction</A></H2>
@@ -78,6 +79,32 @@ If you don't remember the command name that you want, you can press
 you are half-way through entering a word, you will get a list of all
 commands which match what you have already entered.
 </P>
+
+<H2><A NAME="filters">Filters</A></H2>
+
+<P>
+You can limit the output of any command to a subset of the total output
+by using any of the built-in filters. Developers may also add additional
+filters when libcli is embedded in some other software.
+</P>
+
+<P>
+You specify that you want to use a filter by appending <B>|</B> (pipe)
+to your command line, followed by the filter name, and any parameters
+that the filter requires. The built-in filters available are:
+</P>
+
+<UL>
+	<LI><B>inc</B> - Only include lines which match the any of the
+	supplied parameters.</LI>
+
+	<LI><B>begin</B> - Display everything that comes after the first
+	line that matches the single supplied parameter.</LI>
+
+	<LI><B>between</B> - You must specify 2 parameters, and only
+	the output that occurs following the first paramater, and before
+	the second parameter will be displayed.</LI>
+</UL>
 
 <SMALL>David Parrish &lt;david@dparrish.com&gt; 2003-04-23</SMALL>
 </BODY>
