@@ -6,6 +6,7 @@
 #include <malloc.h>
 #include <string.h>
 #include "libcli.h"
+// vim:sw=4 ts=8
 
 struct unp
 {
@@ -19,10 +20,16 @@ int cli_run_command(struct cli_def *cli, FILE *client, char *command);
 char *cli_command_name(struct cli_def *cli, struct cli_command *command)
 {
     int l;
-    char *name = calloc(1, 1), *o;
-    while (command) {
+    static char *name = NULL;
+    char *o;
+
+    if (name) free(name);
+    name = calloc(1,1);
+
+    while (command)
+    {
 	o = name;
-	name = calloc(strlen(command->command) + strlen(o) + 1, 1);
+	name = calloc(strlen(command->command) + strlen(o) + 2, 1);
 	sprintf(name, "%s %s", command->command, o);
 	command = command->parent;
 	free(o);
@@ -219,7 +226,7 @@ struct cli_def *cli_init()
 
     if (!(cli = calloc(sizeof(struct cli_def), 1))) return cli;
 
-    cli_register_command(cli, NULL, "help", cli_int_help, "Disconnect");
+    cli_register_command(cli, NULL, "help", cli_int_help, "Show available commands");
     cli_register_command(cli, NULL, "quit", cli_int_quit, "Disconnect");
     cli_register_command(cli, NULL, "logout", cli_int_quit, "Disconnect");
     cli_register_command(cli, NULL, "exit", cli_int_quit, "Disconnect");
