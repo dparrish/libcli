@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
     printf("Listening on port %d\n", CLITEST_PORT);
     while ((x = accept(s, NULL, 0)))
     {
-	cli_loop(cli, x, NULL);
+	cli_loop(cli, x);
 	close(x);
     }
 
