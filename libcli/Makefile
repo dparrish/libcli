@@ -1,34 +1,37 @@
 MAJOR=1
-MINOR=3
+MINOR=4
 REVISION=0
-FILENAME=libcli.so.$(MAJOR).$(MINOR).$(REVISION)
+LIB=libcli.so
 
 PREFIX?=/usr/local
 
 CC=gcc
-CFLAGS+=-g -O3 -Wall -funroll-loops
-LDFLAGS+=-g -shared -nostartfiles -Wl,-soname,libcli.so
+DEBUG=-g
+CFLAGS+=$(DEBUG) -O3 -Wall -funroll-loops
+LDFLAGS+=-shared -nostartfiles -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
 LIBPATH+= -L.
 
-all:	libcli.so clitest
+all:	$(LIB) clitest
 
-libcli.so: libcli.o
-	$(CC) -o $(FILENAME) $^ $(LDFLAGS) $(LIBS)
-	if [ -f $@ ]; then rm -f $@; fi
-	ln -s $(FILENAME) $@
+$(LIB): libcli.o
+	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
+	-rm -f $(LIB) $(LIB).$(MAJOR).$(MINOR)
+	ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR)
+	ln -s $(LIB).$(MAJOR).$(MINOR) $(LIB)
 
 %.o: %.c
-	$(CC) -fPIC -o $@ -c $^ $(CFLAGS) $(INCLUDE_PATH)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -o $@ -c $^
 
-clitest: clitest.o $(FILENAME)
-	$(CC) $(CFLAGS) -o $@ $^ -L. -lcli
+clitest: clitest.o $(LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $^ -L. -lcli
 
 clean:
-	rm -f *.o clitest
+	rm -f *.o $(LIB)* clitest
 
-install:
-	install -D -g root -m 0755 $(FILENAME) $(PREFIX)/lib/$(FILENAME)
-	install -D -g root -m 0644 libcli.h $(PREFIX)/include/libcli.h
+install: $(LIB)
+	install -d $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib
+	install -m 0644 libcli.h $(DESTDIR)$(PREFIX)/include
+	install -m 0755 $(LIB)* $(DESTDIR)$(PREFIX)/lib
 
 rpm:
 	mkdir libcli-$(MAJOR).$(MINOR).$(REVISION)

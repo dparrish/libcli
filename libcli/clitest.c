@@ -11,11 +11,11 @@
 int cmd_test(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
 {
     int i;
-    cli_print(cli, client, "called %s with \"%s\"\r\n", __FUNCTION__, command);
-    cli_print(cli, client, "%d arguments:\r\n", argc);
+    cli_print(cli, client, "called %s with \"%s\"", __FUNCTION__, command);
+    cli_print(cli, client, "%d arguments:", argc);
     for (i = 0; i < argc; i++)
     {
-	cli_print(cli, client, "	%s\r\n", argv[i]);
+	cli_print(cli, client, "	%s", argv[i]);
     }
     return CLI_OK;
 }
@@ -24,10 +24,10 @@ int cmd_set(struct cli_def *cli, FILE *client, char *command, char *argv[], int 
 {
     if (argc < 2)
     {
-	cli_print(cli, client, "Specify a variable to set\r\n");
+	cli_print(cli, client, "Specify a variable to set");
 	return CLI_OK;
     }
-    cli_print(cli, client, "Setting \"%s\" to \"%s\"\r\n", argv[0], argv[1]);
+    cli_print(cli, client, "Setting \"%s\" to \"%s\"", argv[0], argv[1]);
     return CLI_OK;
 }
 

@@ -189,7 +189,7 @@ int cli_show_help(struct cli_def *cli, FILE *client, struct cli_command *c)
     {
 	if (p->command && p->callback)
 	{
-	    fprintf(client, "%-20s%s\r\n", cli_command_name(cli, p), p->help ? : "");
+	    cli_print(cli, client, "%-20s%s", cli_command_name(cli, p), p->help ? : "");
 	}
 	if (p->children)
 	{
@@ -201,7 +201,7 @@ int cli_show_help(struct cli_def *cli, FILE *client, struct cli_command *c)
 
 int cli_int_help(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
 {
-    fprintf(client, "\r\nCommands available:\r\n");
+    cli_print(cli, client, "\nCommands available:");
     cli_show_help(cli, client, cli->commands);
     return CLI_OK;
 }
@@ -210,11 +210,11 @@ int cli_int_history(struct cli_def *cli, FILE *client, char *command, char *argv
 {
     int i;
 
-    fprintf(client, "\r\nCommand history:\r\n");
+    cli_print(cli, client, "\nCommand history:");
     for (i = 0; i < MAX_HISTORY; i++)
     {
 	if (cli->history[i])
-	    fprintf(client, "%3d. %s\r\n", i, cli->history[i]);
+	    cli_print(cli, client, "%3d. %s", i, cli->history[i]);
     }
     return CLI_OK;
 }
@@ -482,9 +482,9 @@ void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
 {
     int i;
     if (cursor < l) for (i = 0; i < (l - cursor); i++) write(sockfd, " ", 1);
-    for (i = 0; i < l; i++) cmd[i] = '\x08';
-    for (; i < l * 2; i++) cmd[i] = '\x20';
-    for (; i < l * 3; i++) cmd[i] = '\x08';
+    for (i = 0; i < l; i++) cmd[i] = '\b';
+    for (; i < l * 2; i++) cmd[i] = ' ';
+    for (; i < l * 3; i++) cmd[i] = '\b';
     write(sockfd, cmd, i);
     memset(cmd, 0, i);
     l = cursor = 0;
@@ -501,6 +501,8 @@ void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli, FILE 
     if (!cli) return;
     cli->regular_callback = callback;
 }
+
+#define CTRL(c) (c - '@')
 
 int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 {
@@ -628,141 +630,120 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		is_telnet_option = 0;
 	    }
 
-	    // Handle Escape codes
+	    // Handle ANSI arrows
 	    if (esc)
 	    {
-		// Handle arrow keys
-		if (esc == 91)
+		if (esc == '[')
 		{
-		    if (state == 2 && (c == 65 || c == 66))
+		    // Remap to readline control codes
+		    switch (c)
 		    {
-			int history_found = 0;
-			if (c == 65)
-			{
-			    // Up arrow
-			    in_history--;
-			    if (in_history < 0)
-			    {
-				for (in_history = MAX_HISTORY-1; in_history >= 0; in_history--)
-				{
-				    if (cli->history[in_history]) { history_found = 1; break; }
-				}
-			    }
-			    else
-			    {
-				if (cli->history[in_history]) history_found = 1;
-			    }
-			}
-			else if (c == 66)
-			{
-			    // Down arrow
-			    in_history++;
-			    if (in_history >= MAX_HISTORY || !cli->history[in_history])
-			    {
-				int i = 0;
-				for (i = 0; i < MAX_HISTORY; i++)
-				    if (cli->history[i]) { in_history = i; history_found = 1; break; }
-			    }
-			    else
-			    {
-				if (cli->history[in_history]) history_found = 1;
-			    }
-			}
-			if (history_found && cli->history[in_history])
-			{
-			    // Show history item
-			    cli_clear_line(sockfd, cmd, l, cursor);
-			    memset(cmd, 0, 4096);
-			    strcpy(cmd, cli->history[in_history]);
-			    l = cursor = strlen(cmd);
-			    write(sockfd, cmd, l);
-			}
+		    case 'A': c = CTRL('P'); break; // Up
+		    case 'B': c = CTRL('N'); break; // Down
+		    case 'C': c = CTRL('F'); break; // Right
+		    case 'D': c = CTRL('B'); break; // Left
+		    default:  c = 0;
 		    }
-		    else if (state == 2 && c == 68)
-		    {
-			// Left arrow
-			if (cursor != 0)
-			{
-			    cursor--;
-			    write(sockfd, "\x08", 1);
-			}
-		    }
-		    else if (state == 2 && c == 67)
-		    {
-			// Right arrow
-			if (cursor < l)
-			{
-			    write(sockfd, &cmd[cursor], 1);
-			    cursor++;
-			}
-		    }
+		    esc = 0;
 		}
 		else
 		{
-		    if (c == 91) { esc = c; continue; }
+		    esc = (c == '[') ? c : 0;
+		    continue;
 		}
-		esc = 0;
-		continue;
 	    }
 
+	    if (c == 0) continue;
 	    if (c == '\n') continue;
 	    if (c == '\r') { if (state == 2) write(sockfd, "\r\n", 2); break; }
-	    if (c == 0) continue;
 
-	    if (c == 3) { write(sockfd, "\x07", 1); continue; }
 	    if (c == 27) { esc = 1; continue; }
+	    if (c == CTRL('C')) { write(sockfd, "\a", 1); continue; }
 
-	    // Backspace
-	    if (c == 127 || c == 8)
+	    // Back word, backspace/delete
+	    if (c == CTRL('W') || c == CTRL('H') || c == 0x7f)
 	    {
-		if (l == 0 || cursor == 0)
+		int back = 0;
+
+		// Word
+		if (c == CTRL('W'))
 		{
-		    write(sockfd, "\x07", 2);
+		    int nc = cursor;
+
+		    if (l == 0 || cursor == 0) continue;
+
+		    while (nc && cmd[nc - 1] == ' ')
+		    {
+			nc--;
+		    	back++;
+		    }
+
+		    while (nc && cmd[nc - 1] != ' ')
+		    {
+			nc--;
+		    	back++;
+		    }
 		}
+		// Char
 		else
 		{
-		    if (l == cursor)
+		    if (l == 0 || cursor == 0)
 		    {
-			cursor--;
-			cmd[l] = 0;
-			if (state != 1) write(sockfd, "\x08\x20\x08", 3);
+			write(sockfd, "\a", 1);
+			continue;
 		    }
-		    else
-		    {
-			int i;
-			cursor--;
-			if (state != 1)
-			{
-			    for (i = cursor; i <= l; i++) cmd[i] = cmd[i+1];
-			    write(sockfd, "\x08\x08", 1);
-			    write(sockfd, cmd + cursor, strlen(cmd + cursor));
-			    write(sockfd, " ", 1);
-			    for (i = 0; i <= strlen(cmd + cursor); i++)
-				write(sockfd, "\x08", 1);
-			}
-		    }
-		    l--;
+
+		    back = 1;
 		}
-		continue;
+
+		if (back)
+		{
+		    while (back--)
+		    {
+			if (l == cursor)
+			{
+			    cursor--;
+			    cmd[l] = 0;
+			    if (state != 1) write(sockfd, "\b \b", 3);
+			}
+			else
+			{
+			    int i;
+			    cursor--;
+			    if (state != 1)
+			    {
+				for (i = cursor; i <= l; i++) cmd[i] = cmd[i+1];
+				write(sockfd, "\b", 1);
+				write(sockfd, cmd + cursor, strlen(cmd + cursor));
+				write(sockfd, " ", 1);
+				for (i = 0; i <= strlen(cmd + cursor); i++)
+				    write(sockfd, "\b", 1);
+			    }
+			}
+			l--;
+		    }
+
+		    continue;
+		}
 	    }
 
-	    // Ctrl-L
-	    if (c == 12)
+	    // Redraw
+	    if (c == CTRL('L'))
 	    {
 		int i;
 		int totallen = l + strlen(prompt);
 		int cursorback = l - cursor;
-		for (i = 0; i < totallen; i++) write(sockfd, "\x08", 1);
+		for (i = 0; i < totallen; i++) write(sockfd, "\b", 1);
 		for (i = 0; i < totallen; i++) write(sockfd, " ", 1);
-		for (i = 0; i < totallen; i++) write(sockfd, "\x08", 1);
+		for (i = 0; i < totallen; i++) write(sockfd, "\b", 1);
 		write(sockfd, prompt, strlen(prompt));
 		write(sockfd, cmd, l);
-		for (i = 0; i < cursorback; i++) write(sockfd, "\x08", 1);
+		for (i = 0; i < cursorback; i++) write(sockfd, "\b", 1);
 		continue;
 	    }
 
-	    // Ctrl-U
-	    if (c == 21)
+	    // Clear line
+	    if (c == CTRL('U'))
 	    {
 		if (state == 1)
 		{
@@ -776,8 +757,8 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		continue;
 	    }
 
-	    // Ctrl-D
-	    if (c == 4)
+	    // EOT
+	    if (c == CTRL('D'))
 	    {
 		strcpy(cmd, "quit");
 		l = cursor = strlen(cmd);
@@ -786,7 +767,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 	    }
 
 	    // Tab completion
-	    if (state == 2 && c == 9)
+	    if (state == 2 && c == CTRL('I'))
 	    {
 		char *completions[128];
 		int num_completions = 0;
@@ -796,8 +777,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		if (l > 0) num_completions = cli_get_completions(cmd, completions, 128);
 		if (num_completions == 0)
 		{
-		    c = 7;
-		    write(sockfd, &c, 1);
+		    write(sockfd, "\a", 1);
 		}
 		else if (num_completions == 1)
 		{
@@ -805,7 +785,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		    int i;
 		    for (i = l; i > 0; i--, cursor--)
 		    {
-			write(sockfd, "\x08", 1);
+			write(sockfd, "\b", 1);
 			if (i == ' ') break;
 		    }
 		    strcpy((cmd + i), completions[0]);
@@ -813,7 +793,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		    cursor = l;
 		    write(sockfd, completions[0], strlen(completions[0]));
 		}
-		else if (lastchar == 9)
+		else if (lastchar == CTRL('I'))
 		{
 		    // double tab
 		    int i;
@@ -833,9 +813,105 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 		{
 		    // More than one completion
 		    lastchar = c;
-		    c = 7;
-		    write(sockfd, &c, 1);
+		    write(sockfd, "\a", 1);
 		}
+		continue;
+	    }
+
+	    // History
+	    if (c == CTRL('P') || c == CTRL('N'))
+	    {
+		int history_found = 0;
+
+		if (state != 2) continue;
+
+		if (c == CTRL('P')) // Up
+		{
+		    in_history--;
+		    if (in_history < 0)
+		    {
+			for (in_history = MAX_HISTORY-1; in_history >= 0; in_history--)
+			{
+			    if (cli->history[in_history]) { history_found = 1; break; }
+			}
+		    }
+		    else
+		    {
+			if (cli->history[in_history]) history_found = 1;
+		    }
+		}
+		else // Down
+		{
+		    in_history++;
+		    if (in_history >= MAX_HISTORY || !cli->history[in_history])
+		    {
+			int i = 0;
+			for (i = 0; i < MAX_HISTORY; i++)
+			    if (cli->history[i]) { in_history = i; history_found = 1; break; }
+		    }
+		    else
+		    {
+			if (cli->history[in_history]) history_found = 1;
+		    }
+		}
+		if (history_found && cli->history[in_history])
+		{
+		    // Show history item
+		    cli_clear_line(sockfd, cmd, l, cursor);
+		    memset(cmd, 0, 4096);
+		    strcpy(cmd, cli->history[in_history]);
+		    l = cursor = strlen(cmd);
+		    write(sockfd, cmd, l);
+		}
+
+		continue;
+	    }
+
+	    // Left/right cursor motion
+	    if (c == CTRL('B') || c == CTRL('F'))
+	    {
+		if (c == CTRL('B')) // Left
+		{
+		    if (cursor)
+		    {
+			write(sockfd, "\b", 1);
+			cursor--;
+		    }
+		}
+		else // Right
+		{
+		    if (cursor < l)
+		    {
+			write(sockfd, &cmd[cursor], 1);
+			cursor++;
+		    }
+		}
+
+		continue;
+	    }
+
+	    // Start of line
+	    if (c == CTRL('A'))
+	    {
+		if (cursor)
+		{
+		    write(sockfd, "\r", 1);
+		    write(sockfd, prompt, strlen(prompt));
+		    cursor = 0;
+		}
+
+		continue;
+	    }
+
+	    // End of line
+	    if (c == CTRL('E'))
+	    {
+		if (cursor < l)
+		{
+		    write(sockfd, &cmd[cursor], l - cursor);
+		    cursor = l;
+		}
+
 		continue;
 	    }
 
@@ -860,7 +936,7 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 
 		    write(sockfd, &cmd[cursor], l - cursor + 1);
 		    for (i = 0; i < (l - cursor + 1); i++)
-			write(sockfd, "\x08", 1);
+			write(sockfd, "\b", 1);
 		    l++;
 		}
 		else
@@ -967,38 +1043,35 @@ int cli_loop(struct cli_def *cli, int sockfd, char *prompt)
 void cli_print(struct cli_def *cli, FILE *client, char *format, ...)
 {
     static char *buffer = NULL;
-    static int size = 4096;
+    static int size = 0;
+    char *p;
+    int n;
     va_list ap;
 
-    if (!buffer)
-	if (!(buffer = malloc(size)))
-	    return;
-
-    while (1)
+    va_start(ap, format);
+    while (!buffer || (n = vsnprintf(buffer, size, format, ap)) >= size)
     {
-	int n;
-
-	va_start(ap, format);
-	n = vsnprintf(buffer, size, format, ap);
-	va_end(ap);
-
-	/* If that worked, test and send the string. */
-	if (n > -1 && n < size)
-	{
-	    int sendit = CLI_OK;
-	    if (cli->filter)
-		sendit = cli->filter(cli, buffer, cli->filter_param_s, cli->filter_param_i);
-	    if (sendit == CLI_OK)
-		fprintf(client, buffer);
+	if (!(p = realloc(buffer, size += 4096)))
 	    return;
-	}
 
-	/* Else try again with more space. */
-	size *= 2;
-	if ((buffer = realloc(buffer, size)) == NULL)
-	    return;
+	buffer = p;
     }
-    return;
+    va_end(ap);
+
+    if (n < 0) // vsnprintf failed
+    	return;
+
+    p = buffer;
+    do {
+	char *next = strchr(p, '\n');
+	if (next)
+	    *next++ = 0;
+
+	if (!cli->filter || cli->filter(cli, p, cli->filter_param_s, cli->filter_param_i) == CLI_OK)
+	    fprintf(client, "%s\r\n", p);
+
+	p = next;
+    } while (p);
 }
 
 void cli_add_filter(struct cli_def *cli, int (*filter)(struct cli_def *, char *, char **, int), char *params[], int num_params)
@@ -1092,4 +1165,3 @@ int cli_filter_between(struct cli_def *cli, char *string, char *params[], int nu
 
     return CLI_ERROR;
 }
-
