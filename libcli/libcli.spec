@@ -1,4 +1,4 @@
-Version: 1.8.1
+Version: 1.8.2
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -39,6 +39,11 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Thu Nov 11 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.2-1
+- Allow config commands to exit a submode
+- Make "exit" work in exec/config/submodes
+- Add ^K (kill to EOL)
+
 * Mon Jul 12 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.1-1
 - Documentation update.
 - Allow NULL or "" to be passed to cli_set_banner() and
