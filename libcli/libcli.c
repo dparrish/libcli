@@ -1023,11 +1023,12 @@ int cli_loop(struct cli_def *cli, int sockfd)
 			// Redraw
 			if (c == CTRL('L'))
 			{
+				int i;
+				int cursorback = l - cursor;
+
 				if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
 					continue;
 
-				int i;
-				int cursorback = l - cursor;
 				write(sockfd, "\r\n", 2);
 				show_prompt(cli, sockfd);
 				write(sockfd, cmd, l);
