@@ -8,26 +8,26 @@
 
 #define CLITEST_PORT		8000
 
-int cmd_test(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
+int cmd_test(struct cli_def *cli, char *command, char *argv[], int argc)
 {
     int i;
-    cli_print(cli, client, "called %s with \"%s\"", __FUNCTION__, command);
-    cli_print(cli, client, "%d arguments:", argc);
+    cli_print(cli, "called %s with \"%s\"", __FUNCTION__, command);
+    cli_print(cli, "%d arguments:", argc);
     for (i = 0; i < argc; i++)
     {
-	cli_print(cli, client, "	%s", argv[i]);
+	cli_print(cli, "	%s", argv[i]);
     }
     return CLI_OK;
 }
 
-int cmd_set(struct cli_def *cli, FILE *client, char *command, char *argv[], int argc)
+int cmd_set(struct cli_def *cli, char *command, char *argv[], int argc)
 {
     if (argc < 2)
     {
-	cli_print(cli, client, "Specify a variable to set");
+	cli_print(cli, "Specify a variable to set");
 	return CLI_OK;
     }
-    cli_print(cli, client, "Setting \"%s\" to \"%s\"", argv[0], argv[1]);
+    cli_print(cli, "Setting \"%s\" to \"%s\"", argv[0], argv[1]);
     return CLI_OK;
 }
 
@@ -36,6 +36,11 @@ int check_auth(char *username, char *password)
     if (!strcasecmp(username, "fred") && !strcasecmp(password, "nerk"))
 	return 1;
     return 0;
+}
+
+void pc(struct cli_def *cli, char *string)
+{
+	printf("%s\n", string);
 }
 
 int main(int argc, char *argv[])
@@ -58,6 +63,20 @@ int main(int argc, char *argv[])
     cli_register_command(cli, c, "junk", cmd_test, NULL);
 
     cli_set_auth_callback(cli, check_auth);
+
+    // Test reading from a file
+    {
+	    FILE *fh;
+
+	    if ((fh = fopen("clitest.txt", "r")))
+	    {
+		    // This sets a callback which just displays the cli_print() text to stdout
+		    cli_print_callback(cli, pc);
+		    cli_file(cli, fh);
+		    cli_print_callback(cli, NULL);
+		    fclose(fh);
+	    }
+    }
 
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
