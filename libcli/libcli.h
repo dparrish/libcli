@@ -41,5 +41,6 @@ void cli_allow_user(struct cli_def *cli, char *username, char *password);
 void cli_deny_user(struct cli_def *cli, char *username);
 void cli_set_banner(struct cli_def *cli, char *banner);
 void cli_reprompt(struct cli_def *cli);
+void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli, FILE *));
 
 #endif
