@@ -1,6 +1,6 @@
 MAJOR=1
 MINOR=4
-REVISION=0
+REVISION=1
 LIB=libcli.so
 
 PREFIX?=/usr/local
