@@ -1,7 +1,7 @@
 Version: 1.8.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 1
+Release: 2
 Copyright: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -39,6 +39,11 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Mon Jul 12 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.0-2
+- Documentation update.
+- Allow NULL or "" to be passed to cli_set_banner() and
+  cli_set_hostname() to clear a previous value.
+
 * Sun Jul 11 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.0-1
 - Dropped prompt arg from cli_loop now that prompt is set by
   hostname/mode/priv level; bump soname.  Fixes ^L and ^A.
