@@ -3,8 +3,7 @@ MINOR=0
 REVISION=0
 FILENAME=libcli.so.$(MAJOR).$(MINOR).$(REVISION)
 
-
-INSTALLPATH=/usr/local/lib
+PREFIX?=/usr/local
 
 CC=gcc
 CFLAGS+=-g -O3 -Wall -funroll-loops
@@ -26,5 +25,7 @@ clitest: clitest.o
 clean:
 	rm -f *.o clitest
 
-install: $(FILENAME)
-	install -D $(FILENAME) -g root -m 0755 /usr/local/lib/$(FILENAME)
+install:
+	install -D -g root -m 0755 $(FILENAME) $(PREFIX)/lib/$(FILENAME)
+	install -D -g root -m 0644 libcli.h $(PREFIX)/include/libcli.h
+
