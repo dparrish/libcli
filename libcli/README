@@ -72,17 +72,17 @@ The library itself will take care of prompting the user for credentials.
 
 
 Commands are built using a tree-like structure. You define commands with the
-cli_register_command(parent, command, callback, help) function.
+cli_register_command(parent, command, callback, privilege, mode, help) function.
 
 parent is a cli_command * reference to a previously added command. Using a
 parent you can build up complex commands.
 e.g. to provide commands "show users", "show sessions" and "show people", use
 the following sequence:
 
-cli_command *c = cli_register_command(NULL, "show", NULL, NULL);
-cli_register_command(c, "sessions", fn_sessions, "Show the sessions connected");
-cli_register_command(c, "users", fn_users, "Show the users connected");
-cli_register_command(c, "people", fn_people, "Show a list of the people I like");
+cli_command *c = cli_register_command(NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
+cli_register_command(c, "sessions", fn_sessions, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the sessions connected");
+cli_register_command(c, "users", fn_users, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show the users connected");
+cli_register_command(c, "people", fn_people, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Show a list of the people I like");
 
 
 If callback is NULL, the command can be used as part of a tree, but cannot be

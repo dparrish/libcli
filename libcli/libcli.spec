@@ -1,4 +1,4 @@
-Version: 1.5.0
+Version: 1.6.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -39,6 +39,10 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Fri Jun 25 2004 David Parrish <david@dparrish.com> 1.6.0
+- Add support for privilege levels and nested config levels. Thanks to Friedhelm
+  Düsterhöft for most of the code.
+
 * Tue Feb 24 2004 David Parrish <david@dparrish.com>
 - Add cli_print_callback() for overloading the output
 - Don't pass around the FILE * handle anymore, it's in the cli_def struct anyway

@@ -1,5 +1,5 @@
 MAJOR=1
-MINOR=5
+MINOR=6
 REVISION=0
 LIB=libcli.so
 
