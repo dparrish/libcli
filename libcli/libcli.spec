@@ -23,7 +23,7 @@ make
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make PREFIX=$RPM_BUILD_ROOT/usr install
+make DESTDIR=$RPM_BUILD_ROOT PREFIX=/usr install
 find $RPM_BUILD_ROOT/usr ! -type d -print | grep -v '\/(README|\.html)$' | \
     sed "s@^$RPM_BUILD_ROOT@@g" | sed "s/^\(.*\)$/\1\*/" > %{name}-%{version}-filelist
 
@@ -39,6 +39,9 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Wed Jan  5 2005 Brendan O'Dea <bod@optusnet.com.au> 1.8.4-1
+- Add printf attribute to cli_print prototype
+
 * Fri Nov 19 2004 Brendan O'Dea <bod@optusnet.com.au> 1.8.3-1
 - Free help if set in cli_unregister_command (reported by Jung-Che Vincent Li)
 - Correct auth_callback() documentation (reported by Serge B. Khvatov)

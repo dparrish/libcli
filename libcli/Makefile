@@ -1,18 +1,20 @@
-MAJOR=1
-MINOR=8
-REVISION=2
-LIB=libcli.so
+DESTDIR =
+PREFIX = /usr/local
 
-PREFIX?=/usr/local
+MAJOR = 1
+MINOR = 8
+REVISION = 4
+LIB = libcli.so
 
-CC=gcc
-DEBUG=-g
-CFLAGS+=$(DEBUG) -O3 -Wall -funroll-loops
-LDFLAGS+=-shared -nostartfiles -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
-LIBPATH+= -L.
-LIBS=-lcrypt
+CC = gcc
+DEBUG = -g
+OPTIM = -O3
+CFLAGS += $(DEBUG) $(OPTIM) -Wall -Wformat-security -Wno-format-zero-length
+LDFLAGS += -shared -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
+LIBPATH += -L.
+LIBS = -lcrypt
 
-all:	$(LIB) clitest
+all: $(LIB) clitest
 
 $(LIB): libcli.o
 	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
