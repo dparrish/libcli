@@ -1,0 +1,333 @@
+<HTML>
+<HEAD>
+<TITLE>libcli Developer's Reference</TITLE>
+</HEAD>
+<BODY>
+
+<H1>libcli Developer's Reference</H1>
+
+<H2><A NAME="TOC">Table of Contents</A></H2>
+<OL>
+	<LI><A HREF="#Introduction">Introduction</A></LI>
+	<LI><A HREF="#auth">Authentication</A></LI>
+	<LI><A HREF="#tutorial">Tutorial</A></LI>
+	<LI><A HREF="#funcref">Function Reference</A></LI>
+	<OL>
+		<LI><A HREF="#cli_init">cli_init()</A></H3>
+		<LI><A HREF="#cli_done">cli_done()</A></H3>
+		<LI><A HREF="#cli_register_command">cli_register_command()</A></H3>
+		<LI><A HREF="#cli_unregister_command">cli_unregister_command()</A></H3>
+		<LI><A HREF="#cli_loop">cli_loop()</A></H3>
+		<LI><A HREF="#cli_set_auth_callback">cli_set_auth_callback()(char *, char *)</EM>)</A></H3>
+		<LI><A HREF="#cli_allow_user">cli_allow_user()</A></H3>
+		<LI><A HREF="#cli_deny_user">cli_deny_user()</A></H3>
+		<LI><A HREF="#cli_set_banner">cli_set_banner()</A></H3>
+	</OL>
+</OL>
+
+<H2><A NAME="Introduction">1.0 Introduction</A></H2>
+
+<P>
+libcli provides a telnet command-line environment which can be embedded
+in other programs. This environment includes useful features such as
+automatic authentication, history, and command-line editing.
+</P>
+
+<P>
+This guide should show you everything you need to embed libcli into
+your program. If you have any corrections, suggestions or modifications,
+please E-mail David Parrish &lt;david@dparrish.com&gt;.
+</P>
+
+<H2><A NAME="auth">2.0 Authentication</A></H2>
+
+<P>
+Two methods of authentcation are supported by libcli - internal and callback.
+</P>
+
+<P>
+Internal authentication is based on a list of username / password
+combinations that are set up before cli_loop() is called. This list is
+checked with strcasecmp() for the username and strcmp() for the password.
+</P>
+
+<P>
+Callback based authentication calls a callback with the username &amp;
+password that the user enters, and must return a <EM>CLI_OK</EM> or
+<EM>CLI_ERROR</EM>. This can be used for checking passwords against some
+other database, e.g. LDAP.
+</P>
+
+<P>
+If neither <EM>cli_set_auth_callback</EM> or <EM>cli_allow_user</EM>
+have been called before cli_loop(), then authentication will be disabled
+and the user will not be prompted for a username / password combination.
+</P>
+
+<H2><A NAME="tutorial">3.0 Tutorial</A></H2>
+
+This section will guide you through implementing libcli in a basic server.
+
+<OL>
+
+<LI>Create a file libclitest.c.
+<PRE>
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;libcli.h&gt;
+
+int main(int argc, char *argv[])
+{
+	struct sockaddr_in servaddr;
+	struct cli_command *c;
+	int on = 1, x, s;
+
+	<FONT COLOR=blue>// Must be called first to setup data structures</FONT>
+	cli_init();
+
+	<FONT COLOR=blue>// Set the greeting</FONT>
+	cli_set_banner("Welcome to the CLI test program.");
+
+	<FONT COLOR=blue>// Enable 2 username / password combinations</FONT>
+	cli_allow_user("fred", "nerk");
+	cli_allow_user("foo", "bar");
+
+	<FONT COLOR=blue>// Set up a few simple one-level commands</FONT>
+	cli_register_command(NULL, "test", cmd_test, NULL);
+	cli_register_command(NULL, "simple", cmd_test, NULL);
+	cli_register_command(NULL, "simon", NULL, NULL);
+
+	<FONT COLOR=blue>// This command takes arguments</FONT>
+	cli_register_command(NULL, "set", cmd_set, NULL);
+
+	<FONT COLOR=blue>// Set up 2 commands "show counters" and "show junk"</FONT>
+	c = cli_register_command(NULL, "show", NULL, NULL);
+	<FONT COLOR=blue>// Note how we store the previous command and use it as the parent for this one.</FONT>
+	cli_register_command(c, "junk", cmd_test, NULL);
+	<FONT COLOR=blue>// This one has some help text</FONT>
+	cli_register_command(c, "counters", cmd_test, "Show the counters that the system uses");
+
+	<FONT COLOR=blue>// Create a socket</FONT>
+	s = socket(AF_INET, SOCK_STREAM, 0);
+	setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &amp;on, sizeof(on));
+
+	<FONT COLOR=blue>// Listen on port 12345</FONT>
+	memset(&amp;servaddr, 0, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	servaddr.sin_port = htons(12345);
+	bind(s, (struct sockaddr *)&amp;servaddr, sizeof(servaddr));
+
+	<FONT COLOR=blue>// Wait for a connection</FONT>
+	listen(s, 50);
+
+	while ((x = accept(s, NULL, 0)))
+	{
+		<FONT COLOR=blue>// Pass the connection off to libcli</FONT>
+		cli_loop(x, "cli&gt; ");
+		close(x);
+	}
+
+	return 0;
+}
+</PRE>
+<P>
+This code snippet is all that's required to enable a libcli
+program. However it's not yet compilable because we haven't created the
+callback functions.
+</P>
+
+<P>
+A few commands have been created:
+<UL>
+	<LI>test</LI>
+	<LI>simple</LI>
+	<LI>set</LI>
+	<LI>show junk</LI>
+	<LI>show counters</LI>
+</UL>
+
+<P>
+<B>Note</B> that <EM>simon</EM> isn't on this list because <EM>callback</EM> was
+NULL when it was registered, so the command will not be available.
+</P>
+
+<P>
+Also, the standard libcli commands <EM>help</EM>, <EM>exit</EM>, <EM>logout</EM>, <EM>quit</EM> and <EM>history</EM> are also available automatically.
+</P>
+
+</LI>
+
+<LI>
+Make this program complete by adding the callback functions.
+<PRE>
+int cmd_test(FILE *client, char *command, char *argv[], int argc)
+{
+    int i;
+    fprintf(client, "called %s with %s\r\n", __FUNCTION__, command);
+    return CLI_OK;
+}
+
+int cmd_set(FILE *client, char *command, char *argv[], int argc)
+{
+    if (argc &lt; 2)
+    {
+	fprintf(client, "Specify a variable to set\r\n");
+	return CLI_OK;
+    }
+    fprintf(client, "Setting %s to %s\r\n", argv[0], argv[1]);
+    return CLI_OK;
+}
+</PRE>
+
+<P>
+2 callback functions are defined here, <EM>cmd_test</EM> and
+<EM>cmd_set</EM>. <EM>cmd_test</EM> is called by many of the commands
+defined in the tutorial, although in reality you would usually use a
+callback for a single command.
+</P>
+
+<P>
+<EM>cmd_test</EM> simply echos the command entered back to the
+client. Note that it shows the full expanded command, so you can enter
+"<CODE>te</CODE>" at the prompt and it will print back "<CODE>called
+with test</CODE>".
+</P>
+
+<P>
+<EM>cmd_set</EM> handles the arguments given on the command line. This allows you to use a single callback to handle lots of arguments like:
+<UL>
+<LI>set colour green</LI>
+<LI>set name David</LI>
+<LI>set email "I don't have an e-mail address"</LI>
+<LI>etc...</LI>
+</UL>
+</P>
+
+</LI>
+
+<LI>
+Compile the code
+<PRE>
+gcc libclitest.c -o libclitest -lcli
+</PRE>
+
+You can now run the program with ./libclitest and telnet to port 12345 to see your work in action.
+
+</LI>
+</OL>
+
+<H2><A NAME="funcref">4.0 Function Reference</A></H2>
+
+<H3><A NAME="cli_init">4.1 cli_init()</A></H3>
+
+<P>
+This must be called before any other cli_<EM>xxx</EM> function. It sets
+up the internal data structures used for command-line processing.
+</P>
+
+<H3><A NAME="cli_done">4.2 cli_done()</A></H3>
+
+<P>
+This is optional, but it's a good idea to call this when you are finished
+with libcli. This frees memory used by libcli.
+</P>
+
+<H3><A NAME="cli_register_command">4.3 cli_register_command(<EM>struct cli_command *parent, char *command, int (*callback)(FILE *, char *, char **, int), char *help</EM>)</A></H3>
+
+<P>
+Add a command to the internal command tree. Returns a <EM>struct cli_command *</EM>, which you can pass as <EM>parent</EM> to another call to <EM>cli_register_command</EM>.
+</P>
+
+<P>When the command has been entered by the user, <EM>callback</EM> is checked. If it is not NULL, then the callback is called with:</P>
+<OL>
+<LI>FILE * - the output stream</LI>
+<LI>char * - the entire command which was entered. This is after command expansion.</LI>
+<LI>char ** - the list of arguments entered</LI>
+<LI>char ** - the number of arguments entered</LI>
+</OL>
+
+<P>The callback must return <EM>CLI_OK</EM> if the command was successful,
+<EM>CLI_ERROR</EM> if processing wasn't successful and the next matching
+command should be tried (if any), or <EM>CLI_QUIT</EM> to drop the
+connection (e.g. on a fatal error).</P>
+
+<P>If <EM>parent</EM> is NULL, the command is added to the top level of
+commands.</P>
+
+<P>If <EM>help</EM> is provided, it is given to the user when the use
+the <EM>help</EM> command or press <B>?</B>.</P>
+
+<H3><A NAME="cli_unregister_command">4.4 cli_unregister_command(<EM>char *command</EM>)</A></H3>
+
+<P>
+Remove a command <EM>command</EM> and all children. There is not provision
+yet for removing commands at lower than the top level.
+</P>
+
+<H3><A NAME="cli_loop">4.5 cli_loop(<EM>int sockfd, char *prompt</EM>)</A></H3>
+
+<P>
+The main loop of the command-line environment. This must be called with
+the FD of a socket open for bi-directional communication (<EM>sockfd</EM>)
+and the string that the user will be prompted with.
+</P>
+
+<P>
+cli_loop() handles the telnet negotiation and authentication. It
+returns only when the connection is finished, either by a server or
+client disconnect.
+</P>
+
+<P>
+Returns <EM>CLI_OK</EM>.
+</P>
+
+<H3><A NAME="cli_set_auth_callback">4.6 cli_set_auth_callback(<EM>int (*auth_callback)(char *, char *)</EM>)</A></H3>
+
+<P>
+Enables or disables callback based authentication.
+</P>
+
+<P>If <EM>auth_callback</EM> is not NULL, then authentication will be
+required on connection. <EM>auth_callback</EM> will be called with the
+<EM>username</EM> and <EM>password</EM> that the user enters.  </P>
+
+<P><EM>auth_callback</EM> must return <EM>CLI_OK</EM> if authentication
+is successful, and <EM>CLI_ERROR</EM> if not.  </P>
+
+<P> If <EM>auth_callback</EM> is NULL, then callback based authentication
+will be disabled.  </P>
+
+<H3><A NAME="cli_allow_user">4.7 cli_allow_user(<EM>char *username, char *password</EM>)</A></H3>
+
+<P> Enables internal authentication, and adds <EM>username/password</EM>
+to the list of allowed users.  <P>
+
+<P> The internal list of users will be checked before callback based
+authentication is tried.  </P>
+
+<H3><A NAME="cli_deny_user">4.8 cli_deny_user(<EM>char *username</EM>)</A></H3>
+
+<P>
+Removes <EM>username/password</EM> from the list of allowed users.
+</P>
+
+<P> If this is the last combination in the list, then internal
+authentication will be disabled.  </P>
+
+<H3><A NAME="cli_set_banner">4.9 cli_set_banner(<EM>char *banner</EM>)</A></H3>
+
+<P>
+Sets the greeting that clients will be presented with when they
+connect. This may be a security warning for example.
+</P>
+
+<P>
+If <EM>banner</EM> is NULL, then no banner will be presented (the default).
+</P>
+
+<SMALL>David Parrish &lt;david@dparrish.com&gt; 2003-04-23</SMALL>
+</BODY>
+</HTML>
