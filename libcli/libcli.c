@@ -1073,6 +1073,8 @@ int cli_file(struct cli_def *cli, FILE *fh)
 		if (cli_run_command(cli, cmd) == CLI_QUIT)
 			break;
 	}
+
+	free(cmd);
 	return CLI_OK;
 }
 
