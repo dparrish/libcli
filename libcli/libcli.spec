@@ -1,4 +1,4 @@
-Version: 1.8.4
+Version: 1.8.5
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -39,6 +39,9 @@ rm -rf $RPM_BUILD_ROOT
 %doc README Doc/usersguide.html Doc/developers.html
 
 %changelog
+* Mon May  2 2005 Brendan O'Dea <bod@optusnet.com.au> 1.8.5-1
+- Add cli_error function which does not filter output.
+
 * Wed Jan  5 2005 Brendan O'Dea <bod@optusnet.com.au> 1.8.4-1
 - Add printf attribute to cli_print prototype
 
