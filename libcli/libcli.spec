@@ -1,13 +1,13 @@
 Version: 1.8.5
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 1
-Copyright: LGPL
+Release: 2
+License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
 URL: http://www.sf.net/projects/libcli
 Packager: David Parrish <david@dparrish.com>
-BuildRoot: /var/tmp/%{name}-buildroot/
+BuildRoot: %{_tmppath}/%{name}-%{version}-%(%__id -un)
 
 %description
 libcli provides a shared library for including a Cisco-like command-line
@@ -37,8 +37,11 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %doc README Doc/usersguide.html Doc/developers.html
-
 %changelog
+* Fri Nov 25 2005 Brendan O'Dea <bod@optus.net> 1.8.5-2
+- Apply spec changes from Charlie Brady: use License header, change
+  BuildRoot to include username.
+
 * Mon May  2 2005 Brendan O'Dea <bod@optusnet.com.au> 1.8.5-1
 - Add cli_error function which does not filter output.
 
