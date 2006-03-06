@@ -402,13 +402,34 @@ struct cli_def *cli_init()
 	return cli;
 }
 
+void cli_unregister_all(struct cli_def *cli, struct cli_command *command)
+{
+	struct cli_command *c, *p = NULL;
+
+	if (!command) command = cli->commands;
+	if (!command) return;
+
+	for (c = command; c; )
+	{
+		p = c->next;
+
+		// Unregister all child commands
+		if (c->children)
+			cli_unregister_all(cli, c->children);
+
+		if (c->command) free(c->command);
+		if (c->help) free(c->help);
+		free(c);
+
+		c = p;
+	}
+}
+
 int cli_done(struct cli_def *cli)
 {
 	struct unp *u = cli->users, *n;
 
-	while (cli->commands) cli_unregister_command(cli, cli->commands->command);
-	if (cli->banner) free(cli->banner);
-
+	// Free all users
 	while (u)
 	{
 		if (u->username) free(u->username);
@@ -418,6 +439,12 @@ int cli_done(struct cli_def *cli)
 		u = n;
 	}
 
+	// Free all commands
+	cli_unregister_all(cli, NULL);
+
+	if (cli->banner) free(cli->banner);
+	if (cli->promptchar) free(cli->promptchar);
+	if (cli->hostname) free(cli->hostname);
 	free(cli);
 	return CLI_OK;
 }
