@@ -40,6 +40,7 @@ rm -rf $RPM_BUILD_ROOT
 %changelog
 * Mon Mar 06 2006 David Parrish <david@dparrish.com> 1.8.6-1
 - Fix file descriptor leak in cli_loop() - Thanks Liam Widdowson
+- Fix memory leak when calling cli_init() and cli_done() repeatedly.
 
 * Fri Nov 25 2005 Brendan O'Dea <bod@optus.net> 1.8.5-2
 - Apply spec changes from Charlie Brady: use License header, change
