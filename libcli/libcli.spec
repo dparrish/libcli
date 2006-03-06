@@ -1,7 +1,7 @@
-Version: 1.8.5
+Version: 1.8.6
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 2
+Release: 1
 License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -38,6 +38,9 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README Doc/usersguide.html Doc/developers.html
 %changelog
+* Mon Mar 06 2006 David Parrish <david@dparrish.com> 1.8.6-1
+- Fix file descriptor leak in cli_loop() - Thanks Liam Widdowson
+
 * Fri Nov 25 2005 Brendan O'Dea <bod@optus.net> 1.8.5-2
 - Apply spec changes from Charlie Brady: use License header, change
   BuildRoot to include username.
