@@ -471,7 +471,7 @@ int cli_parse_line(char *line, char *words[], int max_words)
 		}
 		else if (*p == '"' || *p == '\'')
 		{
-		    	inquote = *p++;
+			inquote = *p++;
 			word_start = p;
 		}
 		else
@@ -480,7 +480,7 @@ int cli_parse_line(char *line, char *words[], int max_words)
 			{
 				if (*p == '|')
 				{
-				    	words[nwords++] = strdup("|");
+					words[nwords++] = strdup("|");
 				}
 				else if (!isspace(*p))
 					word_start = p;
@@ -584,7 +584,7 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 				len = strlen(argv[0]);
 				if (argv[argc-1][strlen(argv[argc-1])-1] == '?')
 				{
-				    	if (argc == 1)
+					if (argc == 1)
 					{
 						cli_error(cli, "  %-20s %s", "begin",   "Begin with lines that match");
 						cli_error(cli, "  %-20s %s", "between", "Between lines that match");
@@ -621,9 +621,9 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 				*filt = calloc(sizeof(struct cli_filter), 1);
 
 				if (!strncmp("include", argv[0], len) ||
-				    !strncmp("exclude", argv[0], len) ||
-				    !strncmp("grep", argv[0], len) ||
-				    !strncmp("egrep", argv[0], len))
+					!strncmp("exclude", argv[0], len) ||
+					!strncmp("grep", argv[0], len) ||
+					!strncmp("egrep", argv[0], len))
 					rc = cli_match_filter_init(cli, argc, argv, *filt);
 				else if (!strncmp("begin", argv[0], len) ||
 					 !strncmp("between", argv[0], len))
@@ -638,7 +638,7 @@ int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_
 
 				if (rc == CLI_OK)
 				{
-				    	filt = &(*filt)->next;
+					filt = &(*filt)->next;
 				}
 				else
 				{
@@ -737,14 +737,14 @@ void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli))
 
 static int pass_matches(char *pass, char *try)
 {
-    int des;
-    if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX)-1)))
-    	pass += sizeof(DES_PREFIX)-1;
+	int des;
+	if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX)-1)))
+		pass += sizeof(DES_PREFIX)-1;
 
-    if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX)-1))
-    	try = crypt(try, pass);
+	if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX)-1))
+		try = crypt(try, pass);
 
-    return !strcmp(pass, try);
+	return !strcmp(pass, try);
 }
 
 #define CTRL(c) (c - '@')
@@ -766,7 +766,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 {
 	int n;
 	unsigned char c;
-	char *cmd, *oldcmd = NULL;
+	char *cmd = NULL, *oldcmd = NULL;
 	int l, oldl = 0, is_telnet_option = 0, skip = 0, esc = 0;
 	int cursor = 0, insertmode = 1;
 	char *username = NULL, *password = NULL;
@@ -781,9 +781,12 @@ int cli_loop(struct cli_def *cli, int sockfd)
 	memset(cli->history, 0, MAX_HISTORY);
 	write(sockfd, negotiate, strlen(negotiate));
 
-	cmd = malloc(4096);
+	if ((cmd = malloc(4096)) == NULL)
+		return CLI_ERROR;
 
-	cli->client = fdopen(sockfd, "w+");
+	if (!(cli->client = fdopen(sockfd, "w+")))
+		return CLI_ERROR;
+
 	setbuf(cli->client, NULL);
 	if (cli->banner)
 		cli_error(cli, "%s", cli->banner);
@@ -1058,9 +1061,9 @@ int cli_loop(struct cli_def *cli, int sockfd)
 				if (cursor == l)
 					continue;
 
-			    	if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+				if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
 				{
-				    	int c;
+					int c;
 					for (c = cursor; c < l; c++) write(sockfd, " ", 1);
 					for (c = cursor; c < l; c++) write(sockfd, "\b", 1);
 				}
@@ -1073,7 +1076,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 			// EOT
 			if (c == CTRL('D'))
 			{
-			    	if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+				if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
 					break;
 
 				if (l)
@@ -1103,7 +1106,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 				char *completions[128];
 				int num_completions = 0;
 
-			    	if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+				if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
 					continue;
 
 				if (cursor != l) continue;
@@ -1312,7 +1315,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 					oldl = cursor = l - 1;
 					break;
 				}
-			    	write(sockfd, &c, 1);
+				write(sockfd, &c, 1);
 			}
 
 			oldcmd = NULL;
@@ -1353,8 +1356,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 				struct unp *u;
 				for (u = cli->users; u; u = u->next)
 				{
-					if (!strcmp(u->username, username)
-					    && pass_matches(u->password, password))
+					if (!strcmp(u->username, username) && pass_matches(u->password, password))
 					{
 						allowed++;
 						break;
@@ -1424,6 +1426,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 		if (cmd) free(cmd);
 	}
 
+	fclose(cli->client);
 	cli->client = NULL;
 	return CLI_OK;
 }
@@ -1591,7 +1594,7 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
 	filt->data = state = calloc(sizeof(struct cli_match_filter_state), 1);
 
 	if (argv[0][0] == 'i' || // include/exclude
-	    (argv[0][0] == 'e' && argv[0][1] == 'x'))
+		(argv[0][0] == 'e' && argv[0][1] == 'x'))
 	{
 		if (argv[0][0] == 'e')
 			state->flags = MATCH_INVERT;
@@ -1629,8 +1632,8 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
 				break;
 
 			case 'e':
-			    	last++;
-			    	break;
+				last++;
+				break;
 			}
 		}
 
@@ -1645,7 +1648,7 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
 		if (cli->client)
 			fprintf(cli->client, "Invalid pattern \"%s\"\r\n", p);
 
-	    	free(p);
+		free(p);
 		return CLI_ERROR;
 	}
 
@@ -1658,9 +1661,9 @@ int cli_match_filter(struct cli_def *cli, char *string, void *data)
 	struct cli_match_filter_state *state = data;
 	int r = CLI_ERROR;
 
-    	if (!string) // clean up
+	if (!string) // clean up
 	{
-	    	if (state->flags & MATCH_REGEX)
+		if (state->flags & MATCH_REGEX)
 			regfree(&state->match.re);
 		else
 			free(state->match.string);
@@ -1671,7 +1674,7 @@ int cli_match_filter(struct cli_def *cli, char *string, void *data)
 
 	if (state->flags & MATCH_REGEX)
 	{
-	    	if (!regexec(&state->match.re, string, 0, NULL, 0))
+		if (!regexec(&state->match.re, string, 0, NULL, 0))
 			r = CLI_OK;
 	}
 	else
@@ -1726,7 +1729,7 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
 			return CLI_ERROR;
 		}
 
-	    	from = join_words(argc-1, argv+1);
+		from = join_words(argc-1, argv+1);
 	}
 
 	filt->filter = cli_range_filter;
@@ -1743,7 +1746,7 @@ int cli_range_filter(struct cli_def *cli, char *string, void *data)
 	struct cli_range_filter_state *state = data;
 	int r = CLI_ERROR;
 
-    	if (!string) // clean up
+	if (!string) // clean up
 	{
 		free(state->from);
 		free(state->to);
@@ -1756,7 +1759,7 @@ int cli_range_filter(struct cli_def *cli, char *string, void *data)
 
 	if (state->matched)
 	{
-	    	r = CLI_OK;
+		r = CLI_OK;
 		if (state->to && strstr(string, state->to))
 			state->matched = 0;
 	}
@@ -1784,7 +1787,7 @@ int cli_count_filter(struct cli_def *cli, char *string, void *data)
 {
 	int *count = data;
 
-    	if (!string) // clean up
+	if (!string) // clean up
 	{
 		// print count
 		if (cli->client)
