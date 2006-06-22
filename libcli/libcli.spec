@@ -38,6 +38,12 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README Doc/usersguide.html Doc/developers.html
 %changelog
+* Sat Jun 17 2006 Brendan O'Dea <bod@optus.net> 1.8.7-1
+- Code cleanups.
+- Declare internal functions static.
+- Use private data in cli_def rather than static buffers for do_print
+  and command_name functions.
+
 * Mon Mar 06 2006 David Parrish <david@dparrish.com> 1.8.6-1
 - Fix file descriptor leak in cli_loop() - Thanks Liam Widdowson
 - Fix memory leak when calling cli_init() and cli_done() repeatedly.

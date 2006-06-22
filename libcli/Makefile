@@ -3,13 +3,13 @@ PREFIX = /usr/local
 
 MAJOR = 1
 MINOR = 8
-REVISION = 6
+REVISION = 7
 LIB = libcli.so
 
 CC = gcc
 DEBUG = -g
 OPTIM = -O3
-CFLAGS += $(DEBUG) $(OPTIM) -Wall -Wformat-security -Wno-format-zero-length
+CFLAGS += $(DEBUG) $(OPTIM) -Wall -Wextra -Wformat-security -Wno-format-zero-length
 LDFLAGS += -shared -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
 LIBPATH += -L.
 LIBS = -lcrypt
@@ -23,10 +23,12 @@ $(LIB): libcli.o
 	ln -s $(LIB).$(MAJOR).$(MINOR) $(LIB)
 
 %.o: %.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -o $@ -c $^
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -o $@ -c $<
+
+libcli.o: libcli.h
 
 clitest: clitest.o $(LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $^ -L. -lcli
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< -L. -lcli
 
 clean:
 	rm -f *.o $(LIB)* clitest

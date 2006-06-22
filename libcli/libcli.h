@@ -16,8 +16,7 @@
 
 #include <stdio.h>
 
-struct cli_def
-{
+struct cli_def {
     int completion_callback;
     struct cli_command *commands;
     int (*auth_callback)(char *, char *);
@@ -37,17 +36,19 @@ struct cli_def
     struct cli_filter *filters;
     void (*print_callback)(struct cli_def *cli, char *string);
     FILE *client;
+    /* internal buffers */
+    char *_name_buf;
+    char *_print_buf;
+    int _print_bufsz;
 };
 
-struct cli_filter
-{
+struct cli_filter {
     int (*filter)(struct cli_def *cli, char *string, void *data);
     void *data;
     struct cli_filter *next;
 };
 
-struct cli_command
-{
+struct cli_command {
     char *command;
     int (*callback)(struct cli_def *, char *, char **, int);
     int unique_len;
@@ -59,14 +60,22 @@ struct cli_command
     struct cli_command *parent;
 };
 
-struct cli_def *cli_init();
+struct cli_def *cli_init(void);
 int cli_done(struct cli_def *cli);
-struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, char *command, int (*callback)(struct cli_def *, char *, char **, int), int privilege, int mode, char *help);
+struct cli_command *cli_register_command(struct cli_def *cli,
+    struct cli_command *parent, char *command,
+    int (*callback)(struct cli_def *, char *, char **, int),
+    int privilege, int mode, char *help);
+
 int cli_unregister_command(struct cli_def *cli, char *command);
 int cli_loop(struct cli_def *cli, int sockfd);
 int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode);
-void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(char *, char *));
-void cli_set_enable_callback(struct cli_def *cli, int (*enable_callback)(char *));
+void cli_set_auth_callback(struct cli_def *cli,
+    int (*auth_callback)(char *, char *));
+
+void cli_set_enable_callback(struct cli_def *cli,
+    int (*enable_callback)(char *));
+
 void cli_allow_user(struct cli_def *cli, char *username, char *password);
 void cli_allow_enable(struct cli_def *cli, char *password);
 void cli_deny_user(struct cli_def *cli, char *username);
@@ -77,8 +86,13 @@ int cli_set_privilege(struct cli_def *cli, int privilege);
 int cli_set_configmode(struct cli_def *cli, int mode, char *config_desc);
 void cli_reprompt(struct cli_def *cli);
 void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli));
-void cli_print(struct cli_def *cli, char *format, ...) __attribute__((format (printf, 2, 3)));
-void cli_error(struct cli_def *cli, char *format, ...) __attribute__((format (printf, 2, 3)));
-void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *));
+void cli_print(struct cli_def *cli, char *format, ...)
+    __attribute__((format (printf, 2, 3)));
+
+void cli_error(struct cli_def *cli, char *format, ...)
+    __attribute__((format (printf, 2, 3)));
+
+void cli_print_callback(struct cli_def *cli,
+    void (*callback)(struct cli_def *, char *));
 
 #endif
