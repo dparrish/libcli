@@ -1196,7 +1196,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
     /* no auth required? */
     if (!cli->users && !cli->auth_callback)
-    	cli->state = STATE_NORMAL;
+	cli->state = STATE_NORMAL;
 
     while (1)
     {
@@ -1789,9 +1789,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
 	    free(password);
 	    password = strdup(cmd);
-	    if (cli->auth_callback &&
-		cli->auth_callback(username, password))
-		    allowed++;
+	    if (cli->auth_callback && cli->auth_callback(username, password) == CLI_OK)
+		allowed++;
 
 	    if (!allowed)
 	    {

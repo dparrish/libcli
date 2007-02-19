@@ -68,7 +68,11 @@ int cmd_config_int_exit(struct cli_def *cli, UNUSED(char *command),
 
 int check_auth(char *username, char *password)
 {
-    return !(strcasecmp(username, "fred") || strcasecmp(password, "nerk"));
+    if (strcasecmp(username, "fred") != 0)
+	return CLI_ERROR;
+    if (strcasecmp(password, "nerk") != 0)
+	return CLI_ERROR;
+    return CLI_OK;
 }
 
 int check_enable(char *password)
