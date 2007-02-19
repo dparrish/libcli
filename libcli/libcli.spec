@@ -1,4 +1,4 @@
-Version: 1.8.6
+Version: 1.8.8
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -38,6 +38,9 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README Doc/usersguide.html Doc/developers.html
 %changelog
+* Mon Jan 19 2007 David Parrish <david@dparrish.com> 1.8.8-1
+- Fix broken auth_callback logic - Thanks Ben Menchaca
+
 * Sat Jun 17 2006 Brendan O'Dea <bod@optus.net> 1.8.7-1
 - Code cleanups.
 - Declare internal functions static.
