@@ -1,4 +1,4 @@
-Version: 1.8.8
+Version: 1.9.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -8,7 +8,6 @@ Source: %{name}-%{version}.tar.gz
 URL: http://www.sf.net/projects/libcli
 Packager: David Parrish <david@dparrish.com>
 BuildRoot: %{_tmppath}/%{name}-%{version}-%(%__id -un)
-
 %description
 libcli provides a shared library for including a Cisco-like command-line
 interface into other software. It's a telnet interface which supports
@@ -38,6 +37,12 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README Doc/usersguide.html Doc/developers.html
 %changelog
+* Wed Jun 06 2007 David Parrish <david@dparrish.com> 1.9.0-1
+- Implemented tab completion - Thanks Marc Donner, Andrew Silent, Yuriy N. Shkandybin and others
+- Filters are now extendable
+- Rename internal functions to all be cli_xxxx()
+- Many code cleanups and optimisations
+
 * Mon Jan 19 2007 David Parrish <david@dparrish.com> 1.8.8-1
 - Fix broken auth_callback logic - Thanks Ben Menchaca
 

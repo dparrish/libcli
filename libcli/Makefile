@@ -2,8 +2,8 @@ DESTDIR =
 PREFIX = /usr/local
 
 MAJOR = 1
-MINOR = 8
-REVISION = 8
+MINOR = 9
+REVISION = 0
 LIB = libcli.so
 
 CC = gcc
