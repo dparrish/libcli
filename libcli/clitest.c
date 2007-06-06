@@ -29,9 +29,15 @@ int cmd_test(struct cli_def *cli, char *command, char *argv[], int argc)
 int cmd_set(struct cli_def *cli, UNUSED(char *command), char *argv[],
     int argc)
 {
-    if (argc < 2)
+    if (argc < 2 || strcmp(argv[0], "?") == 0)
     {
 	cli_print(cli, "Specify a variable to set");
+	return CLI_OK;
+    }
+
+    if (strcmp(argv[1], "?") == 0)
+    {
+	cli_print(cli, "Specify a value");
 	return CLI_OK;
     }
 
@@ -97,10 +103,7 @@ int main()
     cli_set_banner(cli, "libcli test environment");
     cli_set_hostname(cli, "router");
     cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED,
-    	MODE_EXEC, NULL);
-
-    cli_register_command(cli, NULL, "sex",  NULL, PRIVILEGE_UNPRIVILEGED,
-    	MODE_EXEC, NULL);
+	MODE_EXEC, NULL);
 
     cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED,
 	MODE_EXEC, NULL);
