@@ -512,10 +512,7 @@ void cli_free_history(struct cli_def *cli)
     for (i = 0; i < MAX_HISTORY; i++)
     {
 	if (cli->history[i])
-	{
-	    free(cli->history[i]);
-	    cli->history[i]=NULL;
-	}
+	    free_z(cli->history[i]);
     }
 }
 
@@ -997,7 +994,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
     cli->state = STATE_LOGIN;
 
-    memset(cli->history, 0, MAX_HISTORY);
+    cli_free_history(cli);
     write(sockfd, negotiate, strlen(negotiate));
 
     if ((cmd = malloc(4096)) == NULL)
