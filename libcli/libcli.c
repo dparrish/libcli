@@ -67,7 +67,8 @@ char *cli_command_name(struct cli_def *cli, struct cli_command *command)
     char *o;
 
     if (name) free(name);
-    name = calloc(1, 1);
+    if (!(name = calloc(1, 1)))
+	return NULL;
 
     while (command)
     {
@@ -93,9 +94,24 @@ void cli_set_enable_callback(struct cli_def *cli, int (*enable_callback)(char *)
 void cli_allow_user(struct cli_def *cli, char *username, char *password)
 {
     struct unp *u, *n;
-    n = malloc(sizeof(struct unp));
-    n->username = strdup(username);
-    n->password = strdup(password);
+    if (!(n = malloc(sizeof(struct unp))))
+    {
+	fprintf(STDERR, "Couldn't allocate memory for user: %s", strerror(errno));
+	return;
+    }
+    if (!(n->username = strdup(username)))
+    {
+	fprintf(STDERR, "Couldn't allocate memory for username: %s", strerror(errno));
+	free(n);
+	return;
+    }
+    if (!(n->password = strdup(password))))
+    {
+	fprintf(STDERR, "Couldn't allocate memory for password: %s", strerror(errno));
+	free(n->username);
+	free(n);
+	return;
+    }
     n->next = NULL;
 
     if (!cli->users)
@@ -110,7 +126,10 @@ void cli_allow_user(struct cli_def *cli, char *username, char *password)
 void cli_allow_enable(struct cli_def *cli, char *password)
 {
     free_z(cli->enable_password);
-    cli->enable_password = strdup(password);
+    if (!(cli->enable_password = strdup(password)))
+    {
+	fprintf(STDERR, "Couldn't allocate memory for enable password: %s", strerror(errno));
+    }
 }
 
 void cli_deny_user(struct cli_def *cli, char *username)
@@ -234,11 +253,14 @@ struct cli_command *cli_register_command(struct cli_def *cli,
 
     c->callback = callback;
     c->next = NULL;
-    c->command = strdup(command);
+    if (!(c->command = strdup(command)))
+	return NULL;
     c->parent = parent;
     c->privilege = privilege;
     c->mode = mode;
-    if (help) c->help = strdup(help);
+    if (help)
+	if (!(c->help = strdup(help)))
+	    return NULL;
 
     if (parent)
     {
@@ -413,7 +435,11 @@ struct cli_def *cli_init()
 	return 0;
 
     cli->buf_size = 1024;
-    cli->buffer = calloc(cli->buf_size, 1);
+    if (!(cli->buffer = calloc(cli->buf_size, 1)))
+    {
+	free_z(cli);
+	return 0;
+    }
 
     cli_register_command(cli, 0, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
     cli_register_command(cli, 0, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
@@ -494,7 +520,8 @@ static int cli_add_history(struct cli_def *cli, char *cmd)
 	if (!cli->history[i])
 	{
 	    if (i == 0 || strcasecmp(cli->history[i-1], cmd))
-	    cli->history[i] = strdup(cmd);
+	    if (!(cli->history[i] = strdup(cmd)))
+		return CLI_ERROR;
 	    return CLI_OK;
 	}
     }
@@ -502,7 +529,8 @@ static int cli_add_history(struct cli_def *cli, char *cmd)
     free(cli->history[0]);
     for (i = 0; i < MAX_HISTORY-1; i++)
 	cli->history[i] = cli->history[i+1];
-    cli->history[MAX_HISTORY - 1] = strdup(cmd);
+    if (!(cli->history[MAX_HISTORY - 1] = strdup(cmd)))
+	return CLI_ERROR;
     return CLI_OK;
 }
 
@@ -554,7 +582,10 @@ static int cli_parse_line(char *line, char *words[], int max_words)
 	    if (!word_start)
 	    {
 		if (*p == '|')
-		    words[nwords++] = strdup("|");
+		{
+		    if (!(words[nwords++] = strdup("|")))
+			return 0;
+		}
 		else if (!isspace(*p))
 		    word_start = p;
 	    }
@@ -1601,7 +1632,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
 	    /* require login */
 	    free_z(username);
-	    username = strdup(cmd);
+	    if (!(username = strdup(cmd)))
+		return 0;
 	    cli->state = STATE_PASSWORD;
 	    cli->showprompt = 1;
 	}
@@ -1611,7 +1643,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
 	    int allowed = 0;
 
 	    free_z(password);
-	    password = strdup(cmd);
+	    if (!(password = strdup(cmd)))
+		return 0;
 	    if (cli->auth_callback)
 	    {
 		if (cli->auth_callback(username, password) == CLI_OK)
@@ -1983,7 +2016,8 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
 	    return CLI_ERROR;
 	}
 
-	from = strdup(argv[1]);
+	if (!(from = strdup(argv[1])))
+	    return CLI_ERROR;
 	to = join_words(argc-2, argv+2);
     }
     else // begin
@@ -2045,7 +2079,8 @@ int cli_count_filter_init(struct cli_def *cli, int argc, UNUSED(char **argv), st
     }
 
     filt->filter = cli_count_filter;
-    filt->data = calloc(sizeof(int), 1);
+    if (!(filt->data = calloc(sizeof(int), 1)))
+	return CLI_ERROR;
 
     return CLI_OK;
 }
