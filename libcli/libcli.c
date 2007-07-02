@@ -794,7 +794,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
 	    }
 
 	    if (rc == CLI_OK)
-		rc = c->callback(cli, cli_command_name(cli, c), words + 1, c_words - 1);
+		rc = c->callback(cli, cli_command_name(cli, c), words + start_word + 1, c_words - start_word - 1);
 
 	    while (cli->filters)
 	    {
