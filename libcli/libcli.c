@@ -96,18 +96,18 @@ void cli_allow_user(struct cli_def *cli, char *username, char *password)
     struct unp *u, *n;
     if (!(n = malloc(sizeof(struct unp))))
     {
-	fprintf(STDERR, "Couldn't allocate memory for user: %s", strerror(errno));
+	fprintf(stderr, "Couldn't allocate memory for user: %s", strerror(errno));
 	return;
     }
     if (!(n->username = strdup(username)))
     {
-	fprintf(STDERR, "Couldn't allocate memory for username: %s", strerror(errno));
+	fprintf(stderr, "Couldn't allocate memory for username: %s", strerror(errno));
 	free(n);
 	return;
     }
-    if (!(n->password = strdup(password))))
+    if (!(n->password = strdup(password)))
     {
-	fprintf(STDERR, "Couldn't allocate memory for password: %s", strerror(errno));
+	fprintf(stderr, "Couldn't allocate memory for password: %s", strerror(errno));
 	free(n->username);
 	free(n);
 	return;
@@ -128,7 +128,7 @@ void cli_allow_enable(struct cli_def *cli, char *password)
     free_z(cli->enable_password);
     if (!(cli->enable_password = strdup(password)))
     {
-	fprintf(STDERR, "Couldn't allocate memory for enable password: %s", strerror(errno));
+	fprintf(stderr, "Couldn't allocate memory for enable password: %s", strerror(errno));
     }
 }
 
