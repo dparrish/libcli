@@ -811,7 +811,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
 	else if (cli->mode > MODE_CONFIG && c->mode == MODE_CONFIG)
 	{
 	    // command matched but from another mode,
-	    // remeber it if we fail to find correct command
+	    // remember it if we fail to find correct command
 	    again = c;
 	}
     }
@@ -826,6 +826,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
 
     if (start_word == 0)
 	cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", words[start_word]);
+
     return CLI_ERROR_ARG;
 }
 
@@ -882,25 +883,24 @@ static int cli_get_completions(struct cli_def *cli, char *command, char **comple
     for (i = 0; i < num_words; i++)
     {
 	if (words[i][0] == '|')
-	filter = i;
+	    filter = i;
     }
 
-    if (!num_words) return 0;
-
-    if (command[strlen(command)-1] == ' ') num_words++;
+    if (!num_words)
+    	return 0;
 
     if (filter) // complete filters
     {
-	int all = 0;
-	unsigned int len;
+	unsigned len = 0;
 
-	if (num_words - filter > 2) return 0;    // filter already completed
-	if (num_words - filter == 1) all = 1;
+	if (num_words - filter > 2) // filter already completed
+	    return 0;
 
-	len = strlen(words[num_words-1]);
+	if (num_words - filter > 1)
+	    len = strlen(words[num_words-1]);
 
 	for (i = 0; filter_cmds[i].cmd && k < max_completions; i++)
-	    if (all || ( len != strlen(filter_cmds[i].cmd)
+	    if (!len || (len < strlen(filter_cmds[i].cmd)
 		&& !strncmp(filter_cmds[i].cmd, words[num_words - 1], len)))
 		    completions[k++] = filter_cmds[i].cmd;
 
@@ -908,7 +908,10 @@ static int cli_get_completions(struct cli_def *cli, char *command, char **comple
 	return k;
     }
 
-    for (c = cli->commands, i=0; c && i < num_words && k < max_completions && words[i];)
+    if (command[strlen(command)-1] == ' ')
+	num_words++;
+
+    for (c = cli->commands, i = 0; c && i < num_words && k < max_completions && words[i];)
     {
 	if (cli->privilege < c->privilege)
 	    goto NEXT_COMMAND;
