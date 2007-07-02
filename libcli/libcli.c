@@ -40,7 +40,7 @@ struct cli_filter_cmds
 };
 
 /* free and zero (to avoid double-free) */
-#define free_z(p) if (p) { free(p); (p) = 0; }
+#define free_z(p) do { if (p) { free(p); (p) = 0; } } while (0)
 
 int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
 int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
