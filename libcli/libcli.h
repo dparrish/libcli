@@ -46,7 +46,7 @@ struct cli_def {
     /* internal buffers */
     void *conn;
     void *service;
-    char *commandname;  //temporary buffer for cli_comman_name() to preven leak
+    char *commandname;  // temporary buffer for cli_command_name() to prevent leak
     char *buffer;
     unsigned buf_size;
 };
