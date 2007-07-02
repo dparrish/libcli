@@ -2,7 +2,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <signal.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include "libcli.h"
 
@@ -96,8 +98,10 @@ int main()
     struct cli_command *c;
     struct cli_def *cli;
     int s, x;
-    struct sockaddr_in servaddr;
+    struct sockaddr_in addr;
     int on = 1;
+
+    signal(SIGCHLD, SIG_IGN);
 
     cli = cli_init();
     cli_set_banner(cli, "libcli test environment");
@@ -156,11 +160,11 @@ int main()
     }
     setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 
-    memset(&servaddr, 0, sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(CLITEST_PORT);
-    if (bind(s, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(CLITEST_PORT);
+    if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0)
     {
 	perror("bind");
 	return 1;
@@ -175,8 +179,28 @@ int main()
     printf("Listening on port %d\n", CLITEST_PORT);
     while ((x = accept(s, NULL, 0)))
     {
+	int pid = fork();
+	if (pid < 0)
+	{
+	    perror("fork");
+	    return 1;
+	}
+
+	/* parent */
+	if (pid > 0)
+	{
+	    socklen_t len = sizeof(addr);
+	    if (getpeername(x, (struct sockaddr *) &addr, &len) >= 0)
+		printf(" * accepted connection from %s\n", inet_ntoa(addr.sin_addr));
+
+	    close(x);
+	    continue;
+	}
+
+	/* child */
+	close(s);
 	cli_loop(cli, x);
-	close(x);
+	exit(0);
     }
 
     cli_done(cli);
