@@ -73,7 +73,7 @@ char *cli_command_name(struct cli_def *cli, struct cli_command *command)
     while (command)
     {
 	o = name;
-	asprintf(&name, "%s %s", command->command, o);
+	asprintf(&name, "%s%s%s", command->command, *o ? " " : "", o);
 	command = command->parent;
 	free(o);
     }
@@ -887,7 +887,7 @@ static int cli_get_completions(struct cli_def *cli, char *command, char **comple
 
     if (!num_words) return 0;
 
-    if ( command[strlen(command)-1] == ' ') num_words++;
+    if (command[strlen(command)-1] == ' ') num_words++;
 
     if (filter) // complete filters
     {
