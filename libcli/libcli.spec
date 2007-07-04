@@ -37,8 +37,10 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README Doc/usersguide.html Doc/developers.html
 %changelog
-* Mon Jul  2 2007 Brendan O'Dea <bod@optus.net> 1.9.1-1
+* Thu Jul  5 2007 Brendan O'Dea <bod@optus.net> 1.9.1-1
 - Revert callback argument passing to match 1.8.x
+- Recalculate unique_len on change of priv/mode
+- Fixes for tab completion
 
 * Thu Jun 07 2007 David Parrish <david@dparrish.com> 1.9.0-1
 - Implemented tab completion - Thanks Marc Donner, Andrew Silent, Yuriy N. Shkandybin and others
