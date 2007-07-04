@@ -173,13 +173,57 @@ void cli_set_promptchar(struct cli_def *cli, char *promptchar)
     cli->promptchar = strdup(promptchar);
 }
 
+static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
+{
+    struct cli_command *c, *p;
+    char *cp, *pp;
+    int len;
+
+    for (c = commands; c; c = c->next)
+    {
+	c->unique_len = strlen(c->command);
+	if ((c->mode != MODE_ANY && c->mode != cli->mode) ||
+	    c->privilege > cli->privilege)
+	    continue;
+
+	c->unique_len = 1;
+	for (p = commands; p; p = p->next)
+	{
+	    if (c == p)
+	    	continue;
+
+	    if ((p->mode != MODE_ANY && p->mode != cli->mode) ||
+		p->privilege > cli->privilege)
+	    	continue;
+
+	    cp = c->command;
+	    pp = p->command;
+	    len = 0;
+
+	    while (*cp && *pp && *cp++ == *pp++)
+		len++;
+
+	    if (len > c->unique_len)
+		c->unique_len = len;
+	}
+
+	if (c->children)
+	    cli_build_shortest(cli, c->children);
+    }
+
+    return CLI_OK;
+}
+
 int cli_set_privilege(struct cli_def *cli, int priv)
 {
     int old = cli->privilege;
     cli->privilege = priv;
 
     if (priv != old)
+    {
 	cli_set_promptchar(cli, priv == PRIVILEGE_PRIVILEGED ? "# " : "> ");
+	cli_build_shortest(cli, cli->commands);
+    }
 
     return old;
 }
@@ -213,32 +257,11 @@ int cli_set_configmode(struct cli_def *cli, int mode, char *config_desc)
 	{
 	    cli_set_modestring(cli, "(config)");
 	}
+
+	cli_build_shortest(cli, cli->commands);
     }
 
     return old;
-}
-
-int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
-{
-    struct cli_command *c, *p;
-
-    for (c = commands; c; c = c->next)
-    {
-	for (c->unique_len = 1; c->unique_len <= strlen(c->command); c->unique_len++)
-	{
-	    for (p = commands; p; p = p->next)
-	    {
-		if (c == p) continue;
-		if ((c->mode == p->mode || c->mode == MODE_ANY || p->mode == MODE_ANY) &&
-		    c->privilege == p->privilege &&
-		    strncmp(p->command, c->command, c->unique_len) == 0)
-			break; //foundmatch
-	    }
-	    if (!p) break; //check foundmatch
-	}
-	if (c->children) cli_build_shortest(cli, c->children);
-    }
-    return CLI_OK;
 }
 
 struct cli_command *cli_register_command(struct cli_def *cli,
@@ -548,8 +571,18 @@ static int cli_parse_line(char *line, char *words[], int max_words)
 {
     int nwords = 0;
     char *p = line;
-    char *word_start = line;
+    char *word_start = 0;
     int inquote = 0;
+
+    while (*p)
+    {
+	if (!isspace(*p))
+	{
+	    word_start = p;
+	    break;
+	}
+	p++;
+    }
 
     while (nwords < max_words - 1)
     {
@@ -869,6 +902,7 @@ int cli_run_command(struct cli_def *cli, char *command)
 static int cli_get_completions(struct cli_def *cli, char *command, char **completions, int max_completions)
 {
     struct cli_command *c;
+    struct cli_command *n;
     int num_words, i, k=0;
     char *words[128] = {0};
     int filter = 0;
@@ -877,26 +911,27 @@ static int cli_get_completions(struct cli_def *cli, char *command, char **comple
     while (isspace(*command))
 	command++;
 
-    if (!*command) return 0;
-
     num_words = cli_parse_line(command, words, sizeof(words)/sizeof(words[0]));
-    for (i = 0; i < num_words; i++)
-    {
-	if (words[i][0] == '|')
-	    filter = i;
-    }
+    if (!command[0] || command[strlen(command)-1] == ' ')
+	num_words++;
 
     if (!num_words)
     	return 0;
+
+    for (i = 0; i < num_words; i++)
+    {
+	if (words[i] && words[i][0] == '|')
+	    filter = i;
+    }
 
     if (filter) // complete filters
     {
 	unsigned len = 0;
 
-	if (num_words - filter > 2) // filter already completed
+	if (filter < num_words - 1) // filter already completed
 	    return 0;
 
-	if (num_words - filter > 1)
+	if (filter == num_words - 1)
 	    len = strlen(words[num_words-1]);
 
 	for (i = 0; filter_cmds[i].cmd && k < max_completions; i++)
@@ -908,54 +943,32 @@ static int cli_get_completions(struct cli_def *cli, char *command, char **comple
 	return k;
     }
 
-    if (command[strlen(command)-1] == ' ')
-	num_words++;
-
-    for (c = cli->commands, i = 0; c && i < num_words && k < max_completions && words[i];)
+    for (c = cli->commands, i = 0; c && i < num_words && k < max_completions; c = n)
     {
+	n = c->next;
+
 	if (cli->privilege < c->privilege)
-	    goto NEXT_COMMAND;
+	    continue;
 
 	if (c->mode != cli->mode && c->mode != MODE_ANY)
-	    goto NEXT_COMMAND;
+	    continue;
 
-	if (strncasecmp(c->command, words[i], strlen(words[i])))
-	    goto NEXT_COMMAND;
+	if (words[i] && strncasecmp(c->command, words[i], strlen(words[i])))
+	    continue;
 
-	if (num_words - i == 1)
-	    completions[k++] = c->command;
-
-	if (strncasecmp(c->command, words[i], c->unique_len))
-	    goto NEXT_COMMAND;
-
-	// matched
-	if (num_words - i > 0)
+	if (i < num_words - 1)
 	{
-	    c = c->children;
+	    if (strlen(words[i]) < c->unique_len)
+	    	continue;
+
+	    n = c->children;
 	    i++;
 	    continue;
 	}
 
-	if (strlen(words[i]) == strlen(c->command))
-	{
-	    for(c = c->children, k=0; c; c = c->next)
-	    {
-		if (cli->privilege < c->privilege)
-		    continue;
-		if (c->mode != cli->mode && c->mode != MODE_ANY)
-		    continue;
-		completions[k++] = c->command;
-	    }
-	}
-	else
-	{
-	    completions[0] = c->command;
-	    k = 1;
-	}
-	return k;
-	NEXT_COMMAND:
-	c = c->next;
+	completions[k++] = c->command;
     }
+
     return k;
 }
 
@@ -1401,9 +1414,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
 		if (cursor != l) continue;
 
-		if (l > 0)
-		    num_completions = cli_get_completions(cli, cmd, completions, 128);
-
+		num_completions = cli_get_completions(cli, cmd, completions, 128);
 		if (num_completions == 0)
 		{
 		    write(sockfd, "\a", 1);
