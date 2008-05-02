@@ -50,6 +50,8 @@ struct cli_def {
     char *buffer;
     unsigned buf_size;
     struct timeval timeout_tm;
+    unsigned int idle_timeout;
+    time_t last_action;
 };
 
 struct cli_filter {
@@ -97,5 +99,6 @@ void cli_vabufprint(struct cli_def *cli, char *format, va_list ap);
 void cli_error(struct cli_def *cli, char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *));
 void cli_free_history(struct cli_def *cli);
+void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 
 #endif
