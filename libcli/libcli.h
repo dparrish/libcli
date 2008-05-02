@@ -49,6 +49,7 @@ struct cli_def {
     char *commandname;  // temporary buffer for cli_command_name() to prevent leak
     char *buffer;
     unsigned buf_size;
+    struct timeval timeout_tm;
 };
 
 struct cli_filter {
@@ -89,6 +90,7 @@ int cli_set_privilege(struct cli_def *cli, int privilege);
 int cli_set_configmode(struct cli_def *cli, int mode, char *config_desc);
 void cli_reprompt(struct cli_def *cli);
 void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli));
+void cli_regular_interval(struct cli_def *cli, int seconds);
 void cli_print(struct cli_def *cli, char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_bufprint(struct cli_def *cli, char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_vabufprint(struct cli_def *cli, char *format, va_list ap);
