@@ -8,6 +8,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <time.h>
 #include <regex.h>
 #include "libcli.h"
 
@@ -1065,6 +1066,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
     if (cli->banner)
         cli_error(cli, "%s", cli->banner);
 
+    // Set the last action now so we don't time immediately
+    if (cli->idle_timeout)
+        time(&cli->last_action);
+
     /* start off in unprivileged mode */
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
     cli_set_configmode(cli, MODE_EXEC, NULL);
@@ -1158,6 +1163,16 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK)
                     break;
 
+                if (cli->idle_timeout)
+                {
+                    if (time(NULL) - cli->last_action >= cli->idle_timeout)
+                    {
+                        cli_print(cli, "Idle timeout");
+                        strncpy(cmd, "quit", 4095);
+                        break;
+                    }
+                }
+
                 memcpy(&tm, &cli->timeout_tm, sizeof(tm));
                 continue;
             }
@@ -1171,6 +1186,9 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 l = -1;
                 break;
             }
+
+            if (cli->idle_timeout)
+                time(&cli->last_action);
 
             if (n == 0)
             {
@@ -1739,6 +1757,11 @@ int cli_loop(struct cli_def *cli, int sockfd)
             if (cli_run_command(cli, cmd) == CLI_QUIT)
                 break;
         }
+
+        // Update the last_action time now as the last command run could take a
+        // long time to return
+        if (cli->idle_timeout)
+            time(&cli->last_action);
     }
 
     cli_free_history(cli);
@@ -2134,4 +2157,11 @@ int cli_count_filter(struct cli_def *cli, char *string, void *data)
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *))
 {
     cli->print_callback = callback;
+}
+
+void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds)
+{
+    if (seconds < 1) seconds = 0;
+    cli->idle_timeout = seconds;
+    time(&cli->last_action);
 }

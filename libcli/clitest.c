@@ -155,6 +155,7 @@ int main()
     cli_set_hostname(cli, "router");
     cli_regular(cli, regular_callback);
     cli_regular_interval(cli, 5); // Defaults to 1 second
+    cli_set_idle_timeout(cli, 60); // 60 second idle timeout
     cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED,
         MODE_EXEC, NULL);
 

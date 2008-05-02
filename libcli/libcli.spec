@@ -37,8 +37,9 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README Doc/usersguide.html Doc/developers.html
 %changelog
-* Fri Jun  2 2008 David Parrish <david@dparrish.com> 1.9.2-1
+* Fri Jun  2 2008 David Parrish <david@dparrish.com> 1.10.1-1
 - Add configurable timeout for cli_regular() - defaults to 1 second
+- Add idle timeout support
 
 * Thu Jul  5 2007 Brendan O'Dea <bod@optus.net> 1.9.1-1
 - Revert callback argument passing to match 1.8.x
