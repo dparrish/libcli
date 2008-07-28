@@ -382,8 +382,6 @@ struct cli_command *cli_register_command(struct cli_def *cli,
             if (p) p->next = c;
         }
     }
-
-    cli_build_shortest(cli, (parent) ? parent : cli->commands);
     return c;
 }
 
@@ -1128,6 +1126,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
         "\xFF\xFD\x03"
         "\xFF\xFD\x01";
 
+    cli_build_shortest(cli, cli->commands);
     cli->state = STATE_LOGIN;
 
     cli_free_history(cli);

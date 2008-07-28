@@ -40,6 +40,7 @@ rm -rf $RPM_BUILD_ROOT
 * Fri Jul 28 2008 David Parrish <david@dparrish.com> 1.9.3-1
 - Add support for compiling on WIN32 (Thanks Hamish Coleman)
 - Fix cli_build_shortest() length handling
+- Don't call cli_build_shortest() when registering every command
 
 * Fri Jun  2 2008 David Parrish <david@dparrish.com> 1.9.2-1
 - Add configurable timeout for cli_regular() - defaults to 1 second
