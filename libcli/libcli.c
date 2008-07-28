@@ -1,3 +1,8 @@
+#ifdef WIN32
+#include <winsock2.h>
+#include <windows.h>
+#endif
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
@@ -9,7 +14,9 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <time.h>
+#ifndef WIN32
 #include <regex.h>
+#endif
 #include "libcli.h"
 
 // vim:sw=4 ts=8
@@ -18,6 +25,71 @@
 # define UNUSED(d) d __attribute__ ((unused))
 #else
 # define UNUSED(d) d
+#endif
+
+#ifdef WIN32
+/*
+ * Stupid windows has multiple namespaces for filedescriptors, with different
+ * read/write functions required for each ..
+ */
+int read(int fd, void *buf, unsigned int count) {
+	return recv(fd,buf,count,0);
+	
+}
+int write(int fd,const void *buf, unsigned int count) {
+	return send(fd,buf,count,0);
+}
+int vasprintf(char **strp, const char *fmt, va_list args) {
+	int size;
+
+	size = vsnprintf(NULL,0,fmt,args);
+	if ((*strp=malloc(size+1))==NULL) {
+		return -1;
+	}
+
+	size = vsnprintf(*strp,size+1,fmt,args);
+	return size;
+}
+int asprintf(char **strp, const char *fmt, ...) {
+	va_list args;
+	int size;
+
+	va_start(args,fmt);
+	size = vasprintf(strp,fmt,args);
+
+	va_end(args);
+	return size;
+}
+
+int fprintf(FILE *stream, const char *fmt, ...) {
+	va_list args;
+	int size;
+	char *buf;
+
+	va_start(args,fmt);
+	size = vasprintf(&buf,fmt,args);
+	if (size <0) {
+		goto out;
+	}
+	size = write(stream->_file,buf,size);
+	free(buf);
+
+out:
+	va_end(args);
+	return size;
+}
+
+/*
+ * Dummy definitions to allow compilation on Windows
+ */
+int regex_dummy() {return 0;};
+#define regfree(...) regex_dummy()
+#define regexec(...) regex_dummy()
+#define regcomp(...) regex_dummy()
+#define regex_t int
+#define REG_NOSUB	0
+#define REG_EXTENDED	0
+#define REG_ICASE	0
 #endif
 
 enum cli_states {
@@ -1017,8 +1089,13 @@ static int pass_matches(char *pass, char *try)
     if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX)-1)))
         pass += sizeof(DES_PREFIX)-1;
 
+#ifndef WIN32
+    /*
+     * TODO - find a small crypt(3) function for use on windows
+     */
     if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX)-1))
         try = crypt(try, pass);
+#endif
 
     return !strcmp(pass, try);
 }
@@ -1059,8 +1136,17 @@ int cli_loop(struct cli_def *cli, int sockfd)
     if ((cmd = malloc(4096)) == NULL)
         return CLI_ERROR;
 
+#ifdef WIN32
+    /*
+     * OMG, HACK
+     */
+    if (!(cli->client = fdopen(_open_osfhandle(sockfd,0), "w+")))
+        return CLI_ERROR;
+    cli->client->_file = sockfd;
+#else
     if (!(cli->client = fdopen(sockfd, "w+")))
         return CLI_ERROR;
+#endif
 
     setbuf(cli->client, NULL);
     if (cli->banner)
@@ -1152,7 +1238,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 if (errno == EINTR)
                     continue;
 
-                perror("read");
+                perror("select");
                 l = -1;
                 break;
             }
@@ -1846,12 +1932,12 @@ static void _print(struct cli_def *cli, int print_mode, char *format, va_list ap
     do
     {
         char *next = strchr(p, '\n');
-        struct cli_filter *f = (print_mode&PRINT_FILTERED) ? cli->filters : 0;
+        struct cli_filter *f = (print_mode & PRINT_FILTERED) ? cli->filters : 0;
         int print = 1;
 
         if (next)
             *next++ = 0;
-        else if (print_mode&PRINT_BUFFERED)
+        else if (print_mode & PRINT_BUFFERED)
             break;
 
         while (print && f)
@@ -1873,7 +1959,7 @@ static void _print(struct cli_def *cli, int print_mode, char *format, va_list ap
     if (p && *p)
     {
         if (p != buffer)
-        bcopy(p, buffer, strlen(p));
+	memmove(buffer, p, strlen(p));
     }
     else *buffer = 0;
 }
@@ -1948,6 +2034,13 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
         state->match.string = join_words(argc-1, argv+1);
         return CLI_OK;
     }
+
+#ifdef WIN32
+    /*
+     * No regex functions in windows, so return an error
+     */
+    return CLI_ERROR;
+#endif
 
     state->flags = MATCH_REGEX;
 
