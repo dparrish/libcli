@@ -1,7 +1,12 @@
 #include <stdio.h>
 #include <sys/types.h>
+#ifdef WIN32
+#include <winsock2.h>
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#endif
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
@@ -9,7 +14,7 @@
 #include "libcli.h"
 
 #define CLITEST_PORT                8000
-#define MODE_CONFIG_INT                10
+#define MODE_CONFIG_INT             10
 
 #ifdef __GNUC__
 # define UNUSED(d) d __attribute__ ((unused))
@@ -19,6 +24,41 @@
 
 unsigned int regular_count = 0;
 unsigned int debug_regular = 0;
+
+#ifdef WIN32
+typedef int socklen_t;
+
+int winsock_init()
+{
+    WORD wVersionRequested;
+    WSADATA wsaData;
+    int err;
+
+    // Start up sockets
+    wVersionRequested = MAKEWORD(2, 2);
+
+    err = WSAStartup(wVersionRequested, &wsaData);
+    if (err != 0)
+    {
+        // Tell the user that we could not find a usable WinSock DLL.
+        return 0;
+    }
+
+    /*
+     * Confirm that the WinSock DLL supports 2.2
+     * Note that if the DLL supports versions greater than 2.2 in addition to
+     * 2.2, it will still return 2.2 in wVersion since that is the version we
+     * requested.
+     * */
+    if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+    {
+        // Tell the user that we could not find a usable WinSock DLL.
+        WSACleanup();
+        return 0;
+    }
+    return 1;
+}
+#endif
 
 int cmd_test(struct cli_def *cli, char *command, char *argv[], int argc)
 {
@@ -148,7 +188,15 @@ int main()
     struct sockaddr_in addr;
     int on = 1;
 
+#ifndef WIN32
     signal(SIGCHLD, SIG_IGN);
+#endif
+#ifdef WIN32
+    if (!winsock_init()) {
+        printf("Error initialising winsock\n");
+        return 1;
+    }
+#endif
 
     cli = cli_init();
     cli_set_banner(cli, "libcli test environment");
@@ -238,6 +286,7 @@ int main()
     printf("Listening on port %d\n", CLITEST_PORT);
     while ((x = accept(s, NULL, 0)))
     {
+#ifndef WIN32
         int pid = fork();
         if (pid < 0)
         {
@@ -260,6 +309,11 @@ int main()
         close(s);
         cli_loop(cli, x);
         exit(0);
+#else
+        cli_loop(cli, x);
+        shutdown(x, SD_BOTH);
+        close(x);
+#endif
     }
 
     cli_done(cli);

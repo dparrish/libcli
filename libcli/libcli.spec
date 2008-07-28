@@ -1,4 +1,4 @@
-Version: 1.9.1
+Version: 1.9.3
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -37,7 +37,10 @@ rm -rf $RPM_BUILD_ROOT
 
 %doc README Doc/usersguide.html Doc/developers.html
 %changelog
-* Fri Jun  2 2008 David Parrish <david@dparrish.com> 1.10.1-1
+* Fri Jul 28 2008 David Parrish <david@dparrish.com> 1.9.3-1
+- Add support for compiling on WIN32 (Thanks Hamish Coleman)
+
+* Fri Jun  2 2008 David Parrish <david@dparrish.com> 1.9.2-1
 - Add configurable timeout for cli_regular() - defaults to 1 second
 - Add idle timeout support
 
