@@ -271,7 +271,7 @@ static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
 
             cp = c->command;
             pp = p->command;
-            len = 0;
+            len = 1;
 
             while (*cp && *pp && *cp++ == *pp++)
                 len++;
