@@ -1521,7 +1521,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 char *completions[128];
                 int num_completions = 0;
 
-                if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
                     continue;
 
                 if (cursor != l) continue;
@@ -1577,7 +1577,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
             {
                 int history_found = 0;
 
-                if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
                     continue;
 
                 if (c == CTRL('P')) // Up
