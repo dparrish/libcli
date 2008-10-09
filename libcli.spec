@@ -1,11 +1,11 @@
-Version: 1.9.3
+Version: 1.9.4
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
 License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
-URL: http://www.sf.net/projects/libcli
+URL: http://code.google.com/p/libcli
 Packager: David Parrish <david@dparrish.com>
 BuildRoot: %{_tmppath}/%{name}-%{version}-%(%__id -un)
 %description
@@ -35,8 +35,12 @@ rm -rf $RPM_BUILD_ROOT
 %files -f %{name}-%{version}-filelist
 %defattr(-, root, root)
 
-%doc README Doc/usersguide.html Doc/developers.html
 %changelog
+* Thu Oct  9 2008 David Parrish <david@dparrish.com> 1.9.4-1
+- cli_regular() failures now close client connections
+- Migrate development to Google Code
+- Remove docs as they were out of date and now migrated to Google Code wiki
+
 * Fri Jul 28 2008 David Parrish <david@dparrish.com> 1.9.3-1
 - Add support for compiling on WIN32 (Thanks Hamish Coleman)
 - Fix cli_build_shortest() length handling
