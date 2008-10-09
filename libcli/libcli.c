@@ -1246,7 +1246,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
             {
                 /* timeout every second */
                 if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK)
+                {
+                    strncpy(cmd, "quit", 4096);
                     break;
+                }
 
                 if (cli->idle_timeout)
                 {
