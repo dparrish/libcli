@@ -1,6 +1,10 @@
 #ifndef __LIBCLI_H__
 #define __LIBCLI_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -100,5 +104,9 @@ void cli_error(struct cli_def *cli, char *format, ...) __attribute__((format (pr
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *));
 void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
