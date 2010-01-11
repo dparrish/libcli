@@ -1924,6 +1924,7 @@ static void _print(struct cli_def *cli, int print_mode, char *format, va_list ap
             cli->buffer = realloc(cli->buffer, cli->buf_size);
             if (!cli->buffer)
                 return;
+            va_end(ap);
             va_copy(ap, aq);
             continue;
         }
