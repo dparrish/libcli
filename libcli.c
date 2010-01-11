@@ -1753,7 +1753,6 @@ int cli_loop(struct cli_def *cli, int sockfd)
         }
 
         if (l < 0) break;
-        if (!strcasecmp(cmd, "quit")) break;
 
         if (cli->state == STATE_LOGIN)
         {
