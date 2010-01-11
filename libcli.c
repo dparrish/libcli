@@ -33,50 +33,52 @@
  * read/write functions required for each ..
  */
 int read(int fd, void *buf, unsigned int count) {
-	return recv(fd,buf,count,0);
-	
+    return recv(fd, buf, count, 0);
 }
+
 int write(int fd,const void *buf, unsigned int count) {
-	return send(fd,buf,count,0);
+    return send(fd, buf, count, 0);
 }
+
 int vasprintf(char **strp, const char *fmt, va_list args) {
-	int size;
+    int size;
 
-	size = vsnprintf(NULL,0,fmt,args);
-	if ((*strp=malloc(size+1))==NULL) {
-		return -1;
-	}
+    size = vsnprintf(NULL, 0, fmt, args);
+    if ((*strp = malloc(size + 1)) == NULL) {
+        return -1;
+    }
 
-	size = vsnprintf(*strp,size+1,fmt,args);
-	return size;
+    size = vsnprintf(*strp, size + 1, fmt, args);
+    return size;
 }
+
 int asprintf(char **strp, const char *fmt, ...) {
-	va_list args;
-	int size;
+    va_list args;
+    int size;
 
-	va_start(args,fmt);
-	size = vasprintf(strp,fmt,args);
+    va_start(args, fmt);
+    size = vasprintf(strp, fmt, args);
 
-	va_end(args);
-	return size;
+    va_end(args);
+    return size;
 }
 
 int fprintf(FILE *stream, const char *fmt, ...) {
-	va_list args;
-	int size;
-	char *buf;
+    va_list args;
+    int size;
+    char *buf;
 
-	va_start(args,fmt);
-	size = vasprintf(&buf,fmt,args);
-	if (size <0) {
-		goto out;
-	}
-	size = write(stream->_file,buf,size);
-	free(buf);
+    va_start(args, fmt);
+    size = vasprintf(&buf, fmt, args);
+    if (size < 0) {
+        goto out;
+    }
+    size = write(stream->_file, buf, size);
+    free(buf);
 
 out:
-	va_end(args);
-	return size;
+    va_end(args);
+    return size;
 }
 
 /*
@@ -750,7 +752,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
         int l = strlen(words[start_word])-1;
 
         if (commands->parent && commands->parent->callback)
-            cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),  commands->parent->help ? : ""); 
+            cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),  commands->parent->help ? : "");
 
         for (c = commands; c; c = c->next)
         {
@@ -942,8 +944,8 @@ int cli_run_command(struct cli_def *cli, char *command)
 {
     int r;
     unsigned int num_words, i, f;
-    char *words[128] = {0};
-    int filters[128] = {0};
+    char *words[CLI_MAX_LINE_WORDS] = {0};
+    int filters[CLI_MAX_LINE_WORDS] = {0};
 
     if (!command) return CLI_ERROR;
     while (isspace(*command))
@@ -951,8 +953,8 @@ int cli_run_command(struct cli_def *cli, char *command)
 
     if (!*command) return CLI_OK;
 
-    num_words = cli_parse_line(command, words, sizeof(words) / sizeof(words[0]));
-    for (i = f = 0; i < num_words && f < sizeof(filters) / sizeof(filters[0]) - 1; i++)
+    num_words = cli_parse_line(command, words, CLI_MAX_LINE_WORDS);
+    for (i = f = 0; i < num_words && f < CLI_MAX_LINE_WORDS - 1; i++)
     {
         if (words[i][0] == '|')
         filters[f++] = i;
@@ -979,7 +981,7 @@ static int cli_get_completions(struct cli_def *cli, char *command, char **comple
     struct cli_command *c;
     struct cli_command *n;
     int num_words, i, k=0;
-    char *words[128] = {0};
+    char *words[CLI_MAX_LINE_WORDS] = {0};
     int filter = 0;
 
     if (!command) return 0;
@@ -1132,7 +1134,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
     cli_free_history(cli);
     write(sockfd, negotiate, strlen(negotiate));
 
-    if ((cmd = malloc(4096)) == NULL)
+    if ((cmd = malloc(CLI_MAX_LINE_LENGTH)) == NULL)
         return CLI_ERROR;
 
 #ifdef WIN32
@@ -1181,7 +1183,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
         }
         else
         {
-            memset(cmd, 0, 4096);
+            memset(cmd, 0, CLI_MAX_LINE_LENGTH);
             l = 0;
             cursor = 0;
         }
@@ -1247,7 +1249,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 /* timeout every second */
                 if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK)
                 {
-                    strncpy(cmd, "quit", 4096);
+                    strncpy(cmd, "quit", CLI_MAX_LINE_LENGTH - 1);
                     break;
                 }
 
@@ -1521,7 +1523,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
             /* TAB completion */
             if (c == CTRL('I'))
             {
-                char *completions[128];
+                char *completions[CLI_MAX_LINE_WORDS];
                 int num_completions = 0;
 
                 if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
@@ -1529,7 +1531,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
                 if (cursor != l) continue;
 
-                num_completions = cli_get_completions(cli, cmd, completions, 128);
+                num_completions = cli_get_completions(cli, cmd, completions, CLI_MAX_LINE_WORDS);
                 if (num_completions == 0)
                 {
                     write(sockfd, "\a", 1);
@@ -1627,8 +1629,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 {
                     // Show history item
                     cli_clear_line(sockfd, cmd, l, cursor);
-                    memset(cmd, 0, 4096);
-                    strncpy(cmd, cli->history[in_history], 4095);
+                    memset(cmd, 0, CLI_MAX_LINE_LENGTH);
+                    strncpy(cmd, cli->history[in_history], CLI_MAX_LINE_LENGTH - 1);
                     l = cursor = strlen(cmd);
                     write(sockfd, cmd, l);
                 }
@@ -1699,7 +1701,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
             {
                  /* append to end of line */
                 cmd[cursor] = c;
-                if (l < 4095)
+                if (l < CLI_MAX_LINE_LENGTH - 1)
                 {
                     l++;
                     cursor++;
@@ -1717,7 +1719,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 {
                     int i;
                     // Move everything one character to the right
-                    if (l >= 4094) l--;
+                    if (l >= CLI_MAX_LINE_LENGTH - 2) l--;
                     for (i = l; i >= cursor; i--)
                         cmd[i + 1] = cmd[i];
                     // Write what we've just added
@@ -1865,7 +1867,7 @@ int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode)
 {
     int oldpriv = cli_set_privilege(cli, privilege);
     int oldmode = cli_set_configmode(cli, mode, NULL);
-    char buf[4096];
+    char buf[CLI_MAX_LINE_LENGTH];
 
     while (1)
     {
@@ -1873,7 +1875,7 @@ int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode)
         char *cmd;
         char *end;
 
-        if (fgets(buf, sizeof(buf), fh) == NULL)
+        if (fgets(buf, CLI_MAX_LINE_LENGTH - 1, fh) == NULL)
             break; /* end of file */
 
         if ((p = strpbrk(buf, "#\r\n")))
@@ -1906,30 +1908,32 @@ int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode)
 
 static void _print(struct cli_def *cli, int print_mode, char *format, va_list ap)
 {
-    static char *buffer;
-    static int size, len;
-    char *p;
+    va_list aq;
     int n;
+    char *p;
 
     if (!cli) return; // sanity check
 
-    buffer = cli->buffer;
-    size = cli->buf_size;
-    len = strlen(buffer);
-
-    while ((n = vsnprintf(buffer+len, size-len, format, ap)) >= size-len)
+    while (1)
     {
-        if (!(buffer = realloc(buffer, size += 1024)))
-            return;
-
-        cli->buffer = buffer;
-        cli->buf_size = size;
+        va_copy(aq, ap);
+        n = vsnprintf(cli->buffer, cli->buf_size, format, ap);
+        if (n >= cli->buf_size)
+        {
+            cli->buf_size = n + 1;
+            cli->buffer = realloc(cli->buffer, cli->buf_size);
+            if (!cli->buffer)
+                return;
+            va_copy(ap, aq);
+            continue;
+        }
+        break;
     }
 
-    if (n < 0) // vaprintf failed
+    if (n < 0) // vsnprintf failed
         return;
 
-    p = buffer;
+    p = cli->buffer;
     do
     {
         char *next = strchr(p, '\n');
@@ -1959,10 +1963,10 @@ static void _print(struct cli_def *cli, int print_mode, char *format, va_list ap
 
     if (p && *p)
     {
-        if (p != buffer)
-	memmove(buffer, p, strlen(p));
+        if (p != cli->buffer)
+        memmove(cli->buffer, p, strlen(p));
     }
-    else *buffer = 0;
+    else *cli->buffer = 0;
 }
 
 void cli_bufprint(struct cli_def *cli, char *format, ...)
