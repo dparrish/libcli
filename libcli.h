@@ -27,6 +27,9 @@ extern "C" {
 #define PRINT_FILTERED		0x01
 #define PRINT_BUFFERED		0x02
 
+#define CLI_MAX_LINE_LENGTH     4096
+#define CLI_MAX_LINE_WORDS      128
+
 struct cli_def {
     int completion_callback;
     struct cli_command *commands;
