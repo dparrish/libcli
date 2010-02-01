@@ -1,4 +1,4 @@
-Version: 1.9.4
+Version: 1.9.5
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -36,6 +36,12 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Mon Feb  1 2010 David Parrish <david@dparrish.com> 1.9.5-1
+- Removed dependence on "quit" command
+- Added cli_set_idle_timeout_callback() for custom timeout handling
+- Fixed an error caused by vsnprintf() overwriting it's input data
+- Added #ifdef __cplusplus which should allow linking with C++ now
+
 * Thu Oct  9 2008 David Parrish <david@dparrish.com> 1.9.4-1
 - cli_regular() failures now close client connections
 - Migrate development to Google Code
