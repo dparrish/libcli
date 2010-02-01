@@ -175,6 +175,12 @@ int check_enable(char *password)
     return !strcasecmp(password, "topsecret");
 }
 
+int idle_timeout(struct cli_def *cli)
+{
+    cli_print(cli, "Custom idle timeout");
+    return CLI_QUIT;
+}
+
 void pc(UNUSED(struct cli_def *cli), char *string)
 {
     printf("%s\n", string);
@@ -203,7 +209,7 @@ int main()
     cli_set_hostname(cli, "router");
     cli_regular(cli, regular_callback);
     cli_regular_interval(cli, 5); // Defaults to 1 second
-    cli_set_idle_timeout(cli, 60); // 60 second idle timeout
+    cli_set_idle_timeout_callback(cli, 60, idle_timeout); // 60 second idle timeout
     cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED,
         MODE_EXEC, NULL);
 
