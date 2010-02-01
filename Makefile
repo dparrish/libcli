@@ -3,7 +3,7 @@ PREFIX = /usr/local
 
 MAJOR = 1
 MINOR = 9
-REVISION = 3
+REVISION = 5
 LIB = libcli.so
 
 CC = gcc
