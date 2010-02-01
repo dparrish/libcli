@@ -1249,7 +1249,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 /* timeout every second */
                 if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK)
                 {
-                    strncpy(cmd, "quit", CLI_MAX_LINE_LENGTH - 1);
+                    l = -1;
                     break;
                 }
 
@@ -1258,7 +1258,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     if (time(NULL) - cli->last_action >= cli->idle_timeout)
                     {
                         cli_print(cli, "Idle timeout");
-                        strncpy(cmd, "quit", 4095);
+                        l = -1;
                         break;
                     }
                 }
@@ -1501,9 +1501,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 if (l)
                     continue;
 
-                strcpy(cmd, "quit");
-                l = cursor = strlen(cmd);
-                write(sockfd, "quit\r\n", l + 2);
+                l = -1;
                 break;
             }
 
