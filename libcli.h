@@ -58,6 +58,7 @@ struct cli_def {
     unsigned buf_size;
     struct timeval timeout_tm;
     unsigned int idle_timeout;
+    int (*idle_timeout_callback)(struct cli_def *);
     time_t last_action;
 };
 
@@ -107,6 +108,7 @@ void cli_error(struct cli_def *cli, char *format, ...) __attribute__((format (pr
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, char *));
 void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
+void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));
 
 #ifdef __cplusplus
 }

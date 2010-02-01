@@ -516,6 +516,12 @@ int cli_int_exit(struct cli_def *cli, char *command, char *argv[], int argc)
     return CLI_OK;
 }
 
+int cli_int_idle_timeout(struct cli_def *cli)
+{
+    cli_print(cli, "Idle timeout");
+    return CLI_QUIT;
+}
+
 int cli_int_configure_terminal(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
 {
     cli_set_configmode(cli, MODE_CONFIG, NULL);
@@ -555,6 +561,9 @@ struct cli_def *cli_init()
     // Default to 1 second timeout intervals
     cli->timeout_tm.tv_sec = 1;
     cli->timeout_tm.tv_usec = 0;
+
+    // Set default idle timeout callback, but no timeout
+    cli_set_idle_timeout_callback(cli, 0, cli_int_idle_timeout);
     return cli;
 }
 
@@ -1257,7 +1266,17 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 {
                     if (time(NULL) - cli->last_action >= cli->idle_timeout)
                     {
-                        cli_print(cli, "Idle timeout");
+                        if (cli->idle_timeout_callback)
+                        {
+                            // Call the callback and continue on if successful
+                            if (cli->idle_timeout_callback(cli) == CLI_OK)
+                            {
+                                // Reset the idle timeout counter
+                                time(&cli->last_action);
+                                continue;
+                            }
+                        }
+                        // Otherwise, break out of the main loop
                         l = -1;
                         break;
                     }
@@ -2261,4 +2280,10 @@ void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds)
     if (seconds < 1) seconds = 0;
     cli->idle_timeout = seconds;
     time(&cli->last_action);
+}
+
+void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *))
+{
+    cli_set_idle_timeout(cli, seconds);
+    cli->idle_timeout_callback = callback;
 }
