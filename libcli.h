@@ -60,6 +60,7 @@ struct cli_def {
     unsigned int idle_timeout;
     int (*idle_timeout_callback)(struct cli_def *);
     time_t last_action;
+    int negotiate; // set to 0 to disable Telnet negotiation
 };
 
 struct cli_filter {
@@ -109,6 +110,7 @@ void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, 
 void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));
+void cli_set_negotiate(struct cli_def *cli, int should_negotiate);
 
 #ifdef __cplusplus
 }

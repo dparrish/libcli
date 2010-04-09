@@ -536,6 +536,7 @@ struct cli_def *cli_init()
     if (!(cli = calloc(sizeof(struct cli_def), 1)))
         return 0;
 
+    cli->negotiate = 1;
     cli->buf_size = 1024;
     if (!(cli->buffer = calloc(cli->buf_size, 1)))
     {
@@ -1141,7 +1142,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
     cli->state = STATE_LOGIN;
 
     cli_free_history(cli);
-    write(sockfd, negotiate, strlen(negotiate));
+    if (cli->negotiate)
+        write(sockfd, negotiate, strlen(negotiate));
 
     if ((cmd = malloc(CLI_MAX_LINE_LENGTH)) == NULL)
         return CLI_ERROR;
@@ -2286,4 +2288,9 @@ void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, in
 {
     cli_set_idle_timeout(cli, seconds);
     cli->idle_timeout_callback = callback;
+}
+
+void cli_set_negotiate(struct cli_def *cli, int should_negotiate)
+{
+    cli->negotiate = should_negotiate;
 }
