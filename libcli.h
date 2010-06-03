@@ -61,6 +61,7 @@ struct cli_def {
     int (*idle_timeout_callback)(struct cli_def *);
     time_t last_action;
     int negotiate; // set to 0 to disable Telnet negotiation
+    int page_length; // set to >0 to enable paging
 };
 
 struct cli_filter {

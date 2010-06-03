@@ -528,6 +528,30 @@ int cli_int_configure_terminal(struct cli_def *cli, UNUSED(char *command), UNUSE
     return CLI_OK;
 }
 
+int cli_int_terminal_length(struct cli_def *cli, UNUSED(char *command), char *argv[], int argc)
+{
+    int length = 0;
+    if (argc != 1)
+    {
+        cli_print(cli, "Terminal length is currently %d lines", cli->page_length);
+        return CLI_OK;
+    }
+
+    if (strcmp(argv[0], "?") == 0)
+    {
+        cli_print(cli, "  [length]");
+        return CLI_OK;
+    }
+
+    length = atoi(argv[0]);
+    if (length < 0)
+    {
+        cli_print(cli, "Enter a terminal length in lines. Use 0 to disable paging.");
+        return CLI_OK;
+    }
+    cli->page_length = length;
+    return CLI_OK;
+}
 struct cli_def *cli_init()
 {
     struct cli_def *cli;
@@ -554,6 +578,9 @@ struct cli_def *cli_init()
 
     c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
     cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Configure from the terminal");
+
+    c = cli_register_command(cli, 0, "terminal", 0, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Change terminal parameters");
+    cli_register_command(cli, c, "length", cli_int_terminal_length, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set terminal length");
 
     cli->privilege = cli->mode = -1;
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
