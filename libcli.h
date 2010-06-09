@@ -1,3 +1,5 @@
+// vim:sw=4 ts=8 expandtab tw=100
+
 #ifndef __LIBCLI_H__
 #define __LIBCLI_H__
 
@@ -7,6 +9,10 @@ extern "C" {
 
 #include <stdio.h>
 #include <stdarg.h>
+#ifdef LIBCLI_THREADED
+#include <pthread.h>
+#endif
+#include "stringbuffer.h"
 
 #define CLI_OK			0
 #define CLI_ERROR		-1
@@ -20,8 +26,6 @@ extern "C" {
 #define MODE_ANY		-1
 #define MODE_EXEC		0
 #define MODE_CONFIG		1
-
-#define LIBCLI_HAS_ENABLE	1
 
 #define PRINT_PLAIN		0
 #define PRINT_FILTERED		0x01
@@ -62,6 +66,15 @@ struct cli_def {
     time_t last_action;
     int negotiate; // set to 0 to disable Telnet negotiation
     int page_length; // set to >0 to enable paging
+
+    char *more_prompt;
+    int output_sockfd;
+    int input_sockfd;
+    StringBuffer *input_buffer;
+    StringBuffer *output_buffer;
+#ifdef LIBCLI_THREADED
+    pthread_mutex_t mutex;
+#endif
 };
 
 struct cli_filter {

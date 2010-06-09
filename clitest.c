@@ -204,6 +204,9 @@ int main()
     struct sockaddr_in addr;
     int on = 1;
 
+    // Run StringBuffer unit test
+    stringbuffer_test();
+
 #ifndef WIN32
     signal(SIGCHLD, SIG_IGN);
 #endif

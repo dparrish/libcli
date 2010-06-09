@@ -19,13 +19,24 @@
 #endif
 #include "libcli.h"
 
-// vim:sw=4 ts=8
+// vim:sw=4 ts=8 expandtab tw=100
 
 #ifdef __GNUC__
 # define UNUSED(d) d __attribute__ ((unused))
 #else
 # define UNUSED(d) d
 #endif
+
+#ifdef LIBCLI_THREADED
+void _cli_lock(struct cli_def *cli) { pthread_mutex_lock(&cli->mutex); }
+void _cli_unlock(struct cli_def *cli) { pthread_mutex_unlock(&cli->mutex); }
+#else
+#define _cli_lock(x) {}
+#define _cli_unlock(x) {}
+#endif
+
+#define MATCH_REGEX     1
+#define MATCH_INVERT    2
 
 #ifdef WIN32
 /*
@@ -148,7 +159,11 @@ char *cli_command_name(struct cli_def *cli, struct cli_command *command)
     while (command)
     {
         o = name;
-        asprintf(&name, "%s%s%s", command->command, *o ? " " : "", o);
+        if (asprintf(&name, "%s%s%s", command->command, *o ? " " : "", o) <= 0)
+        {
+            perror("asprintf");
+            return NULL;
+        }
         command = command->parent;
         free(o);
     }
@@ -552,6 +567,7 @@ int cli_int_terminal_length(struct cli_def *cli, UNUSED(char *command), char *ar
     cli->page_length = length;
     return CLI_OK;
 }
+
 struct cli_def *cli_init()
 {
     struct cli_def *cli;
@@ -562,6 +578,14 @@ struct cli_def *cli_init()
 
     cli->negotiate = 1;
     cli->buf_size = 1024;
+
+#ifdef LIBCLI_THREADED
+    pthread_mutex_init(&cli->mutex, NULL);
+#endif
+
+    cli->input_buffer = sb_new();
+    cli->output_buffer = sb_new();
+
     if (!(cli->buffer = calloc(cli->buf_size, 1)))
     {
         free_z(cli);
@@ -638,6 +662,14 @@ int cli_done(struct cli_def *cli)
     /* free all commands */
     cli_unregister_all(cli, 0);
 
+#ifdef LIBCLI_THREADED
+    pthread_mutex_destroy(&cli->mutex);
+#endif
+
+    sb_destroy(cli->input_buffer);
+    sb_destroy(cli->output_buffer);
+
+    free_z(cli->more_prompt);
     free_z(cli->commandname);
     free_z(cli->modestring);
     free_z(cli->banner);
@@ -1152,6 +1184,97 @@ static int show_prompt(struct cli_def *cli, int sockfd)
     return len + write(sockfd, cli->promptchar, strlen(cli->promptchar));
 }
 
+void _cli_overwrite(struct cli_def *cli, char *string)
+{
+    // Write a string of backspacess and spaces to overwrite an existing line
+    int x = strlen(string), len = x * 3, i;
+    char *overwrite = malloc(len);
+    for (i = 0; i < x; i++)
+    {
+        overwrite[i] = '\b';
+        overwrite[i + x] = ' ';
+        overwrite[i + x * 2] = '\b';
+    }
+    fwrite(overwrite, len, 1, cli->client);
+    free(overwrite);
+}
+
+void cli_flush(struct cli_def *cli, int with_more)
+{
+    // Flush the output buffer
+    if (!cli) return;
+    if (with_more && cli->page_length)
+    {
+        // Output with paging
+        char *buffer = malloc(4096);
+        char *overwrite;
+        long len, lines = 0;
+
+        overwrite = calloc(strlen(cli->more_prompt) * 3 + 1, 1);
+
+        while (1)
+        {
+            if (lines >= cli->page_length && sb_len(cli->output_buffer) > 0)
+            {
+                // Output a "more" prompt and wait for keypress
+                if (fwrite(cli->more_prompt, strlen(cli->more_prompt), 1, cli->client) < 0)
+                {
+                    // TODO(dparrish): Handle this error properly
+                    sb_empty(cli->output_buffer);
+                    return;
+                }
+                if ((len = read(cli->input_sockfd, buffer, 1)) <= 0)
+                {
+                    // TODO(dparrish): Handle this error properly
+                    sb_empty(cli->output_buffer);
+                    return;
+                }
+                _cli_overwrite(cli, cli->more_prompt);
+                if (*buffer == '\n' || *buffer == '\r')
+                {
+                    // Show one more line
+                    lines--;
+                }
+                else if (*buffer == ' ')
+                {
+                    // Show one page
+                    lines = 0;
+                }
+                else if (*buffer == 'q' || *buffer == 'Q')
+                {
+                    // Flush and quit
+                    sb_empty(cli->output_buffer);
+                    break;
+                }
+                else
+                {
+                    continue;
+                }
+            }
+            memset(buffer, 0, 4096);
+            if ((len = sb_get_line(cli->output_buffer, buffer, 4095)) <= 0)
+                break;
+            fwrite(buffer, len, 1, cli->client);
+            lines++;
+        }
+        free(buffer);
+    }
+    else
+    {
+        // Don't need line-by-line counting, just send everything
+        char *buffer = malloc(4096);
+        long len;
+        while (1)
+        {
+            if ((len = sb_get(cli->output_buffer, buffer, 4096)) <= 0)
+                break;
+            //write(cli->output_sockfd, buffer, len);
+            fwrite(buffer, len, 1, cli->client);
+        }
+        free(buffer);
+    }
+}
+
 int cli_loop(struct cli_def *cli, int sockfd)
 {
     unsigned char c;
@@ -1174,6 +1297,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
     if ((cmd = malloc(CLI_MAX_LINE_LENGTH)) == NULL)
         return CLI_ERROR;
+
+    cli->output_sockfd = sockfd;
+    cli->input_sockfd = sockfd;
+    cli->more_prompt = strdup(" --More-- ");
 
 #ifdef WIN32
     /*
@@ -1226,12 +1353,14 @@ int cli_loop(struct cli_def *cli, int sockfd)
             cursor = 0;
         }
 
+        cli_flush(cli, 0);
         memcpy(&tm, &cli->timeout_tm, sizeof(tm));
 
         while (1)
         {
             int sr;
             fd_set r;
+
             if (cli->showprompt)
             {
                 if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
@@ -1262,7 +1391,6 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     case STATE_ENABLE_PASSWORD:
                         write(sockfd, "Password: ", strlen("Password: "));
                         break;
-
                 }
 
                 cli->showprompt = 0;
@@ -1288,8 +1416,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK)
                 {
                     l = -1;
+                    cli_flush(cli, 0);
                     break;
                 }
+                cli_flush(cli, 0);
 
                 if (cli->idle_timeout)
                 {
@@ -1300,6 +1430,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                             // Call the callback and continue on if successful
                             if (cli->idle_timeout_callback(cli) == CLI_OK)
                             {
+                                cli_flush(cli, 0);
                                 // Reset the idle timeout counter
                                 time(&cli->last_action);
                                 continue;
@@ -1893,6 +2024,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 break;
         }
 
+        cli_flush(cli, 1);
         // Update the last_action time now as the last command run could take a
         // long time to return
         if (cli->idle_timeout)
@@ -2000,9 +2132,14 @@ static void _print(struct cli_def *cli, int print_mode, char *format, va_list ap
         if (print)
         {
             if (cli->print_callback)
+            {
                 cli->print_callback(cli, p);
+            }
             else if (cli->client)
-                fprintf(cli->client, "%s\r\n", p);
+            {
+                sb_put(cli->output_buffer, p, strlen(p));
+                sb_put(cli->output_buffer, "\r\n", 2);
+            }
         }
 
         p = next;
@@ -2051,8 +2188,6 @@ void cli_error(struct cli_def *cli, char *format, ...)
 struct cli_match_filter_state
 {
     int flags;
-#define MATCH_REGEX                1
-#define MATCH_INVERT                2
     union {
         char *string;
         regex_t re;
