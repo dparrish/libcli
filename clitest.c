@@ -150,6 +150,15 @@ int cmd_debug_regular(struct cli_def *cli, UNUSED(char *command), char *argv[], 
     return CLI_OK;
 }
 
+int cmd_long_text(struct cli_def *cli, UNUSED(char *command), char *argv[], int argc)
+{
+    int i;
+    debug_regular = !debug_regular;
+    for (i = 1; i <= 400; i++)
+        cli_print(cli, "long_text printing line %d", i);
+    return CLI_OK;
+}
+
 int check_auth(char *username, char *password)
 {
     if (strcasecmp(username, "fred") != 0)
@@ -185,6 +194,7 @@ void pc(UNUSED(struct cli_def *cli), char *string)
 {
     printf("%s\n", string);
 }
+
 
 int main()
 {
@@ -234,6 +244,9 @@ int main()
     cli_register_command(cli, c, "junk", cmd_test, PRIVILEGE_UNPRIVILEGED,
         MODE_EXEC, NULL);
 
+    cli_register_command(cli, c, "long", cmd_long_text, PRIVILEGE_UNPRIVILEGED,
+        MODE_EXEC, NULL);
+
     cli_register_command(cli, NULL, "interface", cmd_config_int,
         PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Configure an interface");
 
@@ -252,6 +265,7 @@ int main()
 
     cli_set_auth_callback(cli, check_auth);
     cli_set_enable_callback(cli, check_enable);
+    cli->page_length = 50;
     // Test reading from a file
     {
         FILE *fh;

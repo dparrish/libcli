@@ -1,1 +1,2 @@
-show counters
+show counters foobar
+show long | inc 372
