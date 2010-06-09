@@ -1,22 +1,28 @@
 DESTDIR =
 PREFIX = /usr/local
 
-MAJOR = 1
-MINOR = 9
-REVISION = 5
+MAJOR = 2
+MINOR = 0
+REVISION = 0
 LIB = libcli.so
 
 CC = gcc
 DEBUG = -g
 OPTIM = -O3
-CFLAGS += $(DEBUG) $(OPTIM) -Wall -Wformat-security -Wno-format-zero-length
+LIBS = -lcrypt
+
+# Enable threading support
+OPTS += -DLIBCLI_THREADED
+#OPTS += -DSTRINGBUFFER_DEBUG
+LIBS += -lpthread
+
+CFLAGS += $(DEBUG) $(OPTIM) -Wall -Wformat-security -Wno-format-zero-length $(OPTS)
 LDFLAGS += -shared -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
 LIBPATH += -L.
-LIBS = -lcrypt
 
 all: $(LIB) clitest
 
-$(LIB): libcli.o
+$(LIB): libcli.o stringbuffer.o
 	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
 	-rm -f $(LIB) $(LIB).$(MAJOR).$(MINOR)
 	ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR)
@@ -27,7 +33,7 @@ $(LIB): libcli.o
 
 libcli.o: libcli.h
 
-clitest: clitest.o $(LIB)
+clitest: clitest.o stringbuffer.o $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< -L. -lcli
 
 clitest.exe: clitest.c libcli.o
