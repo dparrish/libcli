@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <signal.h>
 #include <sys/types.h>
 #ifdef WIN32
 #include <winsock2.h>
@@ -195,11 +196,17 @@ void pc(UNUSED(struct cli_def *cli), char *string)
     printf("%s\n", string);
 }
 
+struct cli_def *cli;
+
+void sigint_handler(int signal)
+{
+    cli_done(cli);
+    exit(0);
+}
 
 int main()
 {
     struct cli_command *c;
-    struct cli_def *cli;
     int s, x;
     struct sockaddr_in addr;
     int on = 1;
@@ -307,6 +314,7 @@ int main()
     }
 
     printf("Listening on port %d\n", CLITEST_PORT);
+    signal(SIGINT, sigint_handler);
     while ((x = accept(s, NULL, 0)))
     {
 #ifndef WIN32
@@ -331,6 +339,7 @@ int main()
         /* child */
         close(s);
         cli_loop(cli, x);
+        cli_done(cli);
         exit(0);
 #else
         cli_loop(cli, x);

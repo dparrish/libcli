@@ -1203,14 +1203,11 @@ void cli_flush(struct cli_def *cli, int with_more)
 {
     // Flush the output buffer
     if (!cli) return;
-    if (with_more && cli->page_length)
+    if (with_more && cli->page_length && cli->more_prompt)
     {
         // Output with paging
         char *buffer = malloc(4096);
-        char *overwrite;
         long len, lines = 0;
-
-        overwrite = calloc(strlen(cli->more_prompt) * 3 + 1, 1);
 
         while (1)
         {
