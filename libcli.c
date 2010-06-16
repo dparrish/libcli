@@ -462,7 +462,8 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
     return CLI_OK;
 }
 
-int cli_int_enable(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_enable(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
+                   UNUSED(int argc))
 {
     if (cli->privilege == PRIVILEGE_PRIVILEGED)
         return CLI_OK;
@@ -482,21 +483,24 @@ int cli_int_enable(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv
     return CLI_OK;
 }
 
-int cli_int_disable(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_disable(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
+                    UNUSED(int argc))
 {
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
     cli_set_configmode(cli, MODE_EXEC, NULL);
     return CLI_OK;
 }
 
-int cli_int_help(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_help(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
+                 UNUSED(int argc))
 {
     cli_error(cli, "\nCommands available:");
     cli_show_help(cli, cli->commands);
     return CLI_OK;
 }
 
-int cli_int_history(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_history(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
+                    UNUSED(int argc))
 {
     int i;
 
@@ -510,7 +514,8 @@ int cli_int_history(struct cli_def *cli, UNUSED(char *command), UNUSED(char *arg
     return CLI_OK;
 }
 
-int cli_int_quit(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_quit(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
+                 UNUSED(int argc))
 {
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
     cli_set_configmode(cli, MODE_EXEC, NULL);
@@ -537,7 +542,8 @@ int cli_int_idle_timeout(struct cli_def *cli)
     return CLI_QUIT;
 }
 
-int cli_int_configure_terminal(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_configure_terminal(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
+                               UNUSED(int argc))
 {
     cli_set_configmode(cli, MODE_CONFIG, NULL);
     return CLI_OK;
@@ -592,19 +598,30 @@ struct cli_def *cli_init()
         return 0;
     }
 
-    cli_register_command(cli, 0, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
-    cli_register_command(cli, 0, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
-    cli_register_command(cli, 0, "logout", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
-    cli_register_command(cli, 0, "exit", cli_int_exit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Exit from current mode");
-    cli_register_command(cli, 0, "history", cli_int_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show a list of previously run commands");
-    cli_register_command(cli, 0, "enable", cli_int_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Turn on privileged commands");
-    cli_register_command(cli, 0, "disable", cli_int_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Turn off privileged commands");
+    cli_register_command(cli, 0, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                         "Show available commands");
+    cli_register_command(cli, 0, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                         "Disconnect");
+    cli_register_command(cli, 0, "logout", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                         "Disconnect");
+    cli_register_command(cli, 0, "exit", cli_int_exit, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                         "Exit from current mode");
+    cli_register_command(cli, 0, "history", cli_int_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                         "Show a list of previously run commands");
+    cli_register_command(cli, 0, "enable", cli_int_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                         "Turn on privileged commands");
+    cli_register_command(cli, 0, "disable", cli_int_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC,
+                         "Turn off privileged commands");
 
-    c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
-    cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Configure from the terminal");
+    c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC,
+                             "Enter configuration mode");
+    cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED,
+                         MODE_EXEC, "Configure from the terminal");
 
-    c = cli_register_command(cli, 0, "terminal", 0, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Change terminal parameters");
-    cli_register_command(cli, c, "length", cli_int_terminal_length, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set terminal length");
+    c = cli_register_command(cli, 0, "terminal", 0, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                             "Change terminal parameters");
+    cli_register_command(cli, c, "length", cli_int_terminal_length, PRIVILEGE_UNPRIVILEGED,
+                         MODE_EXEC, "Set terminal length");
 
     cli->privilege = cli->mode = -1;
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -804,7 +821,8 @@ static char *join_words(int argc, char **argv)
     return p;
 }
 
-static int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_words, char *words[], int start_word, int filters[])
+static int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_words,
+                            char *words[], int start_word, int filters[])
 {
     struct cli_command *c, *again = NULL;
     int c_words = num_words;
@@ -821,7 +839,8 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
         int l = strlen(words[start_word])-1;
 
         if (commands->parent && commands->parent->callback)
-            cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),  commands->parent->help ? : "");
+            cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),
+                      commands->parent->help ? : "");
 
         for (c = commands; c; c = c->next)
         {
@@ -883,7 +902,8 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
                     }
                     else
                     {
-                        cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", words[start_word]);
+                        cli_error(cli, "Invalid %s \"%s\"",
+                                  commands->parent ? "argument" : "command", words[start_word]);
                     }
                 }
                 return rc;
@@ -973,7 +993,8 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
             }
 
             if (rc == CLI_OK)
-                rc = c->callback(cli, cli_command_name(cli, c), words + start_word + 1, c_words - start_word - 1);
+                rc = c->callback(cli, cli_command_name(cli, c), words + start_word + 1,
+                                 c_words - start_word - 1);
 
             while (cli->filters)
             {
@@ -1004,7 +1025,8 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
     }
 
     if (start_word == 0)
-        cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", words[start_word]);
+        cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command",
+                  words[start_word]);
 
     return CLI_ERROR_ARG;
 }
@@ -1045,7 +1067,8 @@ int cli_run_command(struct cli_def *cli, char *command)
     return CLI_OK;
 }
 
-static int cli_get_completions(struct cli_def *cli, char *command, char **completions, int max_completions)
+static int cli_get_completions(struct cli_def *cli, char *command, char **completions,
+                               int max_completions)
 {
     struct cli_command *c;
     struct cli_command *n;
@@ -1700,7 +1723,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 char *completions[CLI_MAX_LINE_WORDS];
                 int num_completions = 0;
 
-                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD ||
+                    cli->state == STATE_ENABLE_PASSWORD)
                     continue;
 
                 if (cursor != l) continue;
@@ -1756,7 +1780,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
             {
                 int history_found = 0;
 
-                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD ||
+                    cli->state == STATE_ENABLE_PASSWORD)
                     continue;
 
                 if (c == CTRL('P')) // Up
@@ -2391,7 +2416,8 @@ int cli_range_filter(UNUSED(struct cli_def *cli), char *string, void *data)
     return r;
 }
 
-int cli_count_filter_init(struct cli_def *cli, int argc, UNUSED(char **argv), struct cli_filter *filt)
+int cli_count_filter_init(struct cli_def *cli, int argc, UNUSED(char **argv),
+                          struct cli_filter *filt)
 {
     if (argc > 1)
     {
@@ -2443,7 +2469,8 @@ void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds)
     time(&cli->last_action);
 }
 
-void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *))
+void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds,
+                                   int (*callback)(struct cli_def *))
 {
     cli_set_idle_timeout(cli, seconds);
     cli->idle_timeout_callback = callback;
