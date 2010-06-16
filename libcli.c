@@ -156,11 +156,13 @@ char *cli_command_name(struct cli_def *cli, struct cli_command *command)
     if (!(name = calloc(1, 1)))
         return NULL;
 
+    _cli_lock(cli);
     while (command)
     {
         o = name;
         if (asprintf(&name, "%s%s%s", command->command, *o ? " " : "", o) <= 0)
         {
+            _cli_unlock(cli);
             perror("asprintf");
             return NULL;
         }
@@ -168,6 +170,7 @@ char *cli_command_name(struct cli_def *cli, struct cli_command *command)
         free(o);
     }
     cli->commandname = name;
+    _cli_unlock(cli);
     return name;
 }
 
@@ -208,8 +211,10 @@ void cli_allow_user(struct cli_def *cli, char *username, char *password)
         cli->users = n;
     else
     {
+        _cli_lock(cli);
         for (u = cli->users; u && u->next; u = u->next);
         if (u) u->next = n;
+        _cli_unlock(cli);
     }
 }
 
@@ -217,15 +222,14 @@ void cli_allow_enable(struct cli_def *cli, char *password)
 {
     free_z(cli->enable_password);
     if (!(cli->enable_password = strdup(password)))
-    {
         fprintf(stderr, "Couldn't allocate memory for enable password: %s", strerror(errno));
-    }
 }
 
 void cli_deny_user(struct cli_def *cli, char *username)
 {
     struct unp *u, *p = NULL;
     if (!cli->users) return;
+    _cli_lock(cli);
     for (u = cli->users; u; u = u->next)
     {
         if (strcmp(username, u->username) == 0)
@@ -241,6 +245,7 @@ void cli_deny_user(struct cli_def *cli, char *username)
         }
         p = u;
     }
+    _cli_unlock(cli);
 }
 
 void cli_set_banner(struct cli_def *cli, char *banner)
@@ -260,7 +265,8 @@ void cli_set_hostname(struct cli_def *cli, char *hostname)
 void cli_set_promptchar(struct cli_def *cli, char *promptchar)
 {
     free_z(cli->promptchar);
-    cli->promptchar = strdup(promptchar);
+    if (promptchar && *promptchar)
+        cli->promptchar = strdup(promptchar);
 }
 
 static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
@@ -272,18 +278,16 @@ static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
     for (c = commands; c; c = c->next)
     {
         c->unique_len = strlen(c->command);
-        if ((c->mode != MODE_ANY && c->mode != cli->mode) ||
-            c->privilege > cli->privilege)
+        if ((c->mode != MODE_ANY && c->mode != cli->mode) || c->privilege > cli->privilege)
             continue;
 
         c->unique_len = 1;
         for (p = commands; p; p = p->next)
         {
             if (c == p)
-                    continue;
+                continue;
 
-            if ((p->mode != MODE_ANY && p->mode != cli->mode) ||
-                p->privilege > cli->privilege)
+            if ((p->mode != MODE_ANY && p->mode != cli->mode) || p->privilege > cli->privilege)
                     continue;
 
             cp = c->command;
@@ -390,13 +394,13 @@ struct cli_command *cli_register_command(struct cli_def *cli,
     else
     {
         if (!cli->commands)
-        {
             cli->commands = c;
-        }
         else
         {
+            _cli_lock(cli);
             for (p = cli->commands; p && p->next; p = p->next);
             if (p) p->next = c;
+            _cli_unlock(cli);
         }
     }
     return c;
@@ -425,6 +429,7 @@ int cli_unregister_command(struct cli_def *cli, char *command)
     if (!command) return -1;
     if (!cli->commands) return CLI_OK;
 
+    _cli_lock(cli);
     for (c = cli->commands; c; c = c->next)
     {
         if (strcmp(c->command, command) == 0)
@@ -435,10 +440,12 @@ int cli_unregister_command(struct cli_def *cli, char *command)
                 cli->commands = c->next;
 
             cli_free_command(c);
+            _cli_unlock(cli);
             return CLI_OK;
         }
         p = c;
     }
+    _cli_unlock(cli);
 
     return CLI_OK;
 }
@@ -447,6 +454,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
 {
     struct cli_command *p;
 
+    _cli_lock(cli);
     for (p = c; p; p = p->next)
     {
         if (p->command && p->callback && cli->privilege >= p->privilege &&
@@ -458,6 +466,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
         if (p->children)
             cli_show_help(cli, p->children);
     }
+    _cli_unlock(cli);
 
     return CLI_OK;
 }
@@ -491,8 +500,7 @@ int cli_int_disable(struct cli_def *cli, UNUSED(char *command), UNUSED(char *arg
     return CLI_OK;
 }
 
-int cli_int_help(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
-                 UNUSED(int argc))
+int cli_int_help(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
 {
     cli_error(cli, "\nCommands available:");
     cli_show_help(cli, cli->commands);
@@ -514,8 +522,7 @@ int cli_int_history(struct cli_def *cli, UNUSED(char *command), UNUSED(char *arg
     return CLI_OK;
 }
 
-int cli_int_quit(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]),
-                 UNUSED(int argc))
+int cli_int_quit(struct cli_def *cli, UNUSED(char *command), UNUSED(char *argv[]), UNUSED(int argc))
 {
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
     cli_set_configmode(cli, MODE_EXEC, NULL);
@@ -591,6 +598,7 @@ struct cli_def *cli_init()
 
     cli->input_buffer = sb_new();
     cli->output_buffer = sb_new();
+    cli->more_prompt = strdup(" --More-- ");
 
     if (!(cli->buffer = calloc(cli->buf_size, 1)))
     {
@@ -643,6 +651,7 @@ void cli_unregister_all(struct cli_def *cli, struct cli_command *command)
     if (!command) command = cli->commands;
     if (!command) return;
 
+    _cli_lock(cli);
     for (c = command; c; )
     {
         p = c->next;
@@ -657,6 +666,7 @@ void cli_unregister_all(struct cli_def *cli, struct cli_command *command)
 
         c = p;
     }
+    _cli_unlock(cli);
 }
 
 int cli_done(struct cli_def *cli)
@@ -723,11 +733,13 @@ static int cli_add_history(struct cli_def *cli, char *cmd)
 void cli_free_history(struct cli_def *cli)
 {
     int i;
+    _cli_lock(cli);
     for (i = 0; i < MAX_HISTORY; i++)
     {
         if (cli->history[i])
             free_z(cli->history[i]);
     }
+    _cli_unlock(cli);
 }
 
 static int cli_parse_line(char *line, char *words[], int max_words)
@@ -838,6 +850,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
     {
         int l = strlen(words[start_word])-1;
 
+        _cli_lock(cli);
         if (commands->parent && commands->parent->callback)
             cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),
                       commands->parent->help ? : "");
@@ -850,6 +863,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
                 && (c->mode == cli->mode || c->mode == MODE_ANY))
                     cli_error(cli, "  %-20s %s", c->command, c->help ? : "");
         }
+        _cli_unlock(cli);
 
         return CLI_OK;
     }
@@ -1320,7 +1334,6 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
     cli->output_sockfd = sockfd;
     cli->input_sockfd = sockfd;
-    cli->more_prompt = strdup(" --More-- ");
 
 #ifdef WIN32
     /*
