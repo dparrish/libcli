@@ -22,7 +22,7 @@ LIBPATH += -L.
 
 all: $(LIB) clitest
 
-$(LIB): libcli.o stringbuffer.o
+$(LIB): libcli.o stringbuffer.o internal_commands.o
 	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
 	-rm -f $(LIB) $(LIB).$(MAJOR).$(MINOR)
 	ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR)

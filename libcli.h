@@ -34,6 +34,20 @@ extern "C" {
 #define CLI_MAX_LINE_LENGTH     4096
 #define CLI_MAX_LINE_WORDS      128
 
+enum cli_states {
+    STATE_LOGIN,
+    STATE_PASSWORD,
+    STATE_NORMAL,
+    STATE_ENABLE_PASSWORD,
+    STATE_ENABLE
+};
+
+#ifdef __GNUC__
+# define UNUSED(d) d __attribute__ ((unused))
+#else
+# define UNUSED(d) d
+#endif
+
 struct cli_def {
     int completion_callback;
     struct cli_command *commands;
@@ -125,6 +139,7 @@ void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));
 void cli_set_negotiate(struct cli_def *cli, int should_negotiate);
+int cli_show_help(struct cli_def *cli, struct cli_command *c);
 
 #ifdef __cplusplus
 }
