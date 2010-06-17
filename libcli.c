@@ -1161,9 +1161,10 @@ void cli_flush(struct cli_def *cli, int with_more)
                 }
             }
             memset(buffer, 0, 4096);
-            if ((len = sb_get_line(cli->output_buffer, buffer, 4095)) <= 0)
+            if ((len = sb_get_string(cli->output_buffer, buffer, 4095)) <= 0)
                 break;
             fwrite(buffer, len, 1, cli->client);
+            fwrite("\r\n", 2, 1, cli->client);
             lines++;
         }
         free(buffer);
@@ -1175,10 +1176,10 @@ void cli_flush(struct cli_def *cli, int with_more)
         long len;
         while (1)
         {
-            if ((len = sb_get(cli->output_buffer, buffer, 4096)) <= 0)
+            if ((len = sb_get_string(cli->output_buffer, buffer, 4096)) <= 0)
                 break;
-            //write(cli->output_sockfd, buffer, len);
             fwrite(buffer, len, 1, cli->client);
+            fwrite("\r\n", 2, 1, cli->client);
         }
         free(buffer);
     }
@@ -2047,8 +2048,7 @@ static void _print(struct cli_def *cli, int print_mode, char *format, va_list ap
             }
             else if (cli->client)
             {
-                sb_put(cli->output_buffer, p, strlen(p));
-                sb_put(cli->output_buffer, "\r\n", 2);
+                sb_put_string(cli->output_buffer, p);
             }
         }
 

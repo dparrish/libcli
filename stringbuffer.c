@@ -2,6 +2,7 @@
 
 #include <malloc.h>
 #include <memory.h>
+#include <assert.h>
 #include <stdlib.h>
 #ifdef LIBCLI_THREADED
 #include <pthread.h>
@@ -118,6 +119,12 @@ long sb_put(StringBuffer *sb, char *buf, long len)
     return len;
 }
 
+long sb_put_string(StringBuffer *sb, char *buf)
+{
+    if (!sb || !buf || !*buf) return 0;
+    return sb_put(sb, buf, strlen(buf) + 1);
+}
+
 long sb_peek(StringBuffer *sb, char *buf, long len)
 {
     long ret = len;
@@ -160,7 +167,7 @@ long sb_get(StringBuffer *sb, char *buf, long len)
     return ret;
 }
 
-long sb_get_line(StringBuffer *sb, char *buf, long len)
+long sb_get_string(StringBuffer *sb, char *buf, long len)
 {
     long i, c = 0;
     if (!sb || !buf || !len) return 0;
@@ -169,19 +176,20 @@ long sb_get_line(StringBuffer *sb, char *buf, long len)
     for (i = sb->head; i < sb->tail; i++)
     {
         c++;
-        if (*(sb->buf + i) == 0 || *(sb->buf + i) == '\n')
+        if (*(sb->buf + i) == 0)
         {
-            memset(buf, 0, len);
+            buf[c < len ? c : len] = 0;
             _sb_unlock(sb);
             return sb_get(sb, buf, c < len ? c : len);
         }
     }
     _sb_unlock(sb);
 #ifdef STRINGBUFFER_DEBUG
-    printf("sb_get_line() did not find a full line\n");
+    printf("sb_get_string() did not find a string\n");
 #endif
     return 0;
 }
+
 
 long sb_len(StringBuffer *sb)
 {
@@ -207,47 +215,29 @@ void stringbuffer_test()
     sb_resize(sb, 50);
     sb->max = 100;
 
-    sb_put(sb, src, strlen(src));
+    sb_put_string(sb, src);
     memset(dest, 0, 150);
     sb_peek(sb, dest, strlen(src));
-    if (strcmp(src, dest) != 0) {
-        printf("%s:%d Compare failed! (%s)\n", __FILE__, __LINE__, dest);
-        exit(0);
-    }
+    assert(strcmp(src, dest) == 0);
     memset(dest, 0, 150);
-    sb_get_line(sb, dest, 149);
-    if (strcmp(src, dest) != 0) {
-        printf("%s:%d Compare failed! (%s)\n", __FILE__, __LINE__, dest);
-        exit(0);
-    }
+    sb_get_string(sb, dest, 149);
+    assert(strcmp(src, dest) == 0);
     memset(dest, 0, 150);
     sb_get(sb, dest, strlen(src));
-    if (strcmp(src, dest) == 0) {
-        printf("%s:%d Compare failed! (%s)\n", __FILE__, __LINE__, dest);
-        exit(0);
-    }
+    assert(strcmp(src, dest));
     sb_put(sb, src, strlen(src));
     memset(dest, 0, 150);
     sb_get(sb, dest, strlen(src));
-    if (strcmp(src, dest) != 0) {
-        printf("%s:%d Compare failed! (%s)\n", __FILE__, __LINE__, dest);
-        exit(0);
-    }
+    assert(strcmp(src, dest) == 0);
     sb_put(sb, src, strlen(src));
     sb_put(sb, src, strlen(src));
     sb_put(sb, src, strlen(src));
     memset(dest, 0, 150);
     sb_get(sb, dest, strlen(src));
-    if (strcmp(src, dest) != 0) {
-        printf("%s:%d Compare failed! (%s)\n", __FILE__, __LINE__, dest);
-        exit(0);
-    }
+    assert(strcmp(src, dest) == 0);
     memset(dest, 0, 150);
     sb_get(sb, dest, strlen(src));
-    if (strcmp(src, dest) != 0) {
-        printf("%s:%d Compare failed! (%s)\n", __FILE__, __LINE__, dest);
-        exit(0);
-    }
+    assert(strcmp(src, dest) == 0);
 
     sb_destroy(sb);
 }
