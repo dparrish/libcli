@@ -22,16 +22,14 @@ LIBPATH += -L.
 
 all: $(LIB) clitest
 
-$(LIB): libcli.o stringbuffer.o internal_commands.o
+$(LIB): libcli.o stringbuffer.o internal_commands.o filter.o
 	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
 	-rm -f $(LIB) $(LIB).$(MAJOR).$(MINOR)
 	ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR)
 	ln -s $(LIB).$(MAJOR).$(MINOR) $(LIB)
 
-%.o: %.c
+%.o: %.c %.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -o $@ -c $<
-
-libcli.o: libcli.h
 
 clitest: clitest.o stringbuffer.o $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< -L. -lcli

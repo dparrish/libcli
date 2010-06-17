@@ -214,6 +214,9 @@ int main()
     // Run StringBuffer unit test
     stringbuffer_test();
 
+    // Run Filter unit test
+    filter_test();
+
 #ifndef WIN32
     signal(SIGCHLD, SIG_IGN);
 #endif

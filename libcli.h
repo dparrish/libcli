@@ -9,10 +9,12 @@ extern "C" {
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <sys/time.h>
 #ifdef LIBCLI_THREADED
 #include <pthread.h>
 #endif
 #include "stringbuffer.h"
+#include "filter.h"
 
 #define CLI_OK			0
 #define CLI_ERROR		-1
