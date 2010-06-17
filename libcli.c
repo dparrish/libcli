@@ -528,7 +528,6 @@ void cli_unregister_all(struct cli_def *cli, struct cli_command *command)
     if (!command) command = cli->commands;
     if (!command) return;
 
-    _cli_lock(cli);
     for (c = command; c; )
     {
         p = c->next;
@@ -543,7 +542,6 @@ void cli_unregister_all(struct cli_def *cli, struct cli_command *command)
 
         c = p;
     }
-    _cli_unlock(cli);
 }
 
 int cli_done(struct cli_def *cli)
