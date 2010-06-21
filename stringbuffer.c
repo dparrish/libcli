@@ -4,6 +4,7 @@
 #include <memory.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <stdio.h>
 #ifdef LIBCLI_THREADED
 #include <pthread.h>
 #endif
