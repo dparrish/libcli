@@ -9,7 +9,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <memory.h>
+#if !defined(__APPLE__)
 #include <malloc.h>
+#endif
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
