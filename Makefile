@@ -1,3 +1,4 @@
+UNAME = $(shell sh -c 'uname -s 2>/dev/null || echo not')
 DESTDIR =
 PREFIX = /usr/local
 
@@ -10,9 +11,15 @@ CC = gcc
 DEBUG = -g
 OPTIM = -O3
 CFLAGS += $(DEBUG) $(OPTIM) -Wall -Wformat-security -Wno-format-zero-length
-LDFLAGS += -shared -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
+LDFLAGS += -shared
 LIBPATH += -L.
+
+ifeq ($(UNAME),Darwin)
+LDFLAGS += -Wl,-install_name,$(LIB).$(MAJOR).$(MINOR)
+else
+LDFLAGS += -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
 LIBS = -lcrypt
+endif
 
 all: $(LIB) clitest
 
