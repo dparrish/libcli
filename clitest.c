@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #endif
 #include <signal.h>
+#include <strings.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -61,7 +62,7 @@ int winsock_init()
 }
 #endif
 
-int cmd_test(struct cli_def *cli, char *command, char *argv[], int argc)
+int cmd_test(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
     int i;
     cli_print(cli, "called %s with \"%s\"", __FUNCTION__, command);
@@ -72,7 +73,7 @@ int cmd_test(struct cli_def *cli, char *command, char *argv[], int argc)
     return CLI_OK;
 }
 
-int cmd_set(struct cli_def *cli, UNUSED(char *command), char *argv[],
+int cmd_set(struct cli_def *cli, UNUSED(const char *command), char *argv[],
     int argc)
 {
     if (argc < 2 || strcmp(argv[0], "?") == 0)
@@ -95,7 +96,7 @@ int cmd_set(struct cli_def *cli, UNUSED(char *command), char *argv[],
             cli_print(cli, "Specify a regular callback interval in seconds");
             return CLI_OK;
         }
-        sscanf(argv[1], "%d", &sec);
+        sscanf(argv[1], "%u", &sec);
         if (sec < 1)
         {
             cli_print(cli, "Specify a regular callback interval in seconds");
@@ -111,7 +112,7 @@ int cmd_set(struct cli_def *cli, UNUSED(char *command), char *argv[],
     return CLI_OK;
 }
 
-int cmd_config_int(struct cli_def *cli, UNUSED(char *command), char *argv[],
+int cmd_config_int(struct cli_def *cli, UNUSED(const char *command), char *argv[],
     int argc)
 {
     if (argc < 1)
@@ -131,27 +132,27 @@ int cmd_config_int(struct cli_def *cli, UNUSED(char *command), char *argv[],
     return CLI_OK;
 }
 
-int cmd_config_int_exit(struct cli_def *cli, UNUSED(char *command),
+int cmd_config_int_exit(struct cli_def *cli, UNUSED(const char *command),
     UNUSED(char *argv[]), UNUSED(int argc))
 {
     cli_set_configmode(cli, MODE_CONFIG, NULL);
     return CLI_OK;
 }
 
-int cmd_show_regular(struct cli_def *cli, UNUSED(char *command), char *argv[], int argc)
+int cmd_show_regular(struct cli_def *cli, UNUSED(const char *command), char *argv[], int argc)
 {
     cli_print(cli, "cli_regular() has run %u times", regular_count);
     return CLI_OK;
 }
 
-int cmd_debug_regular(struct cli_def *cli, UNUSED(char *command), char *argv[], int argc)
+int cmd_debug_regular(struct cli_def *cli, UNUSED(const char *command), char *argv[], int argc)
 {
     debug_regular = !debug_regular;
     cli_print(cli, "cli_regular() debugging is %s", debug_regular ? "enabled" : "disabled");
     return CLI_OK;
 }
 
-int check_auth(char *username, char *password)
+int check_auth(const char *username, const char *password)
 {
     if (strcasecmp(username, "fred") != 0)
         return CLI_ERROR;
@@ -171,7 +172,7 @@ int regular_callback(struct cli_def *cli)
     return CLI_OK;
 }
 
-int check_enable(char *password)
+int check_enable(const char *password)
 {
     return !strcasecmp(password, "topsecret");
 }
@@ -182,7 +183,7 @@ int idle_timeout(struct cli_def *cli)
     return CLI_QUIT;
 }
 
-void pc(UNUSED(struct cli_def *cli), char *string)
+void pc(UNUSED(struct cli_def *cli), const char *string)
 {
     printf("%s\n", string);
 }
