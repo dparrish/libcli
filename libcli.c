@@ -144,7 +144,7 @@ static ssize_t _write(int fd, const void *buf, size_t count)
     ssize_t thisTime =0;
     while (count != written)
     {
-        thisTime = write(fd,buf+written,count-written);
+        thisTime = write(fd, (char*)buf + written, count - written);
         if (thisTime == -1) 
         {
             if (errno == EINTR)
