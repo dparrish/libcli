@@ -10,7 +10,7 @@ LIB = libcli.so
 CC = gcc
 DEBUG = -g
 OPTIM = -O3
-CFLAGS += $(DEBUG) $(OPTIM) -Wall -Wformat-security -Wno-format-zero-length
+CFLAGS += $(DEBUG) $(OPTIM) -Wall -std=c99 -pedantic -Wformat-security -Wno-format-zero-length -Werror -Wwrite-strings -Wformat -fdiagnostics-show-option -Wextra -Wsign-compare -Wcast-align -Wno-unused-parameter
 LDFLAGS += -shared
 LIBPATH += -L.
 
