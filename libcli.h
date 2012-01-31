@@ -63,6 +63,7 @@ struct cli_def {
     unsigned int idle_timeout;
     int (*idle_timeout_callback)(struct cli_def *);
     time_t last_action;
+    int telnet_protocol;
 };
 
 struct cli_filter {
@@ -114,6 +115,10 @@ void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, 
 void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));
+
+// Enable or disable telnet protocol negotiation.
+// Note that this is enabled by default and must be changed before cli_loop() is run.
+void cli_telnet_protocol(struct cli_def *cli, int telnet_protocol);
 
 #ifdef __cplusplus
 }

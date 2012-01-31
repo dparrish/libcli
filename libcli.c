@@ -568,6 +568,7 @@ struct cli_def *cli_init()
         free_z(cli);
         return 0;
     }
+    cli->telnet_protocol = 1;
 
     cli_register_command(cli, 0, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
     cli_register_command(cli, 0, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
@@ -1166,17 +1167,20 @@ int cli_loop(struct cli_def *cli, int sockfd)
     int cursor = 0, insertmode = 1;
     char *cmd = NULL, *oldcmd = 0;
     char *username = NULL, *password = NULL;
-    const char *negotiate =
-        "\xFF\xFB\x03"
-        "\xFF\xFB\x01"
-        "\xFF\xFD\x03"
-        "\xFF\xFD\x01";
 
     cli_build_shortest(cli, cli->commands);
     cli->state = STATE_LOGIN;
 
     cli_free_history(cli);
-    _write(sockfd, negotiate, strlen(negotiate));
+    if (cli->telnet_protocol)
+    {
+        static const char *negotiate =
+            "\xFF\xFB\x03"
+            "\xFF\xFB\x01"
+            "\xFF\xFD\x03"
+            "\xFF\xFD\x01";
+        _write(sockfd, negotiate, strlen(negotiate));
+    }
 
     if ((cmd = malloc(CLI_MAX_LINE_LENGTH)) == NULL)
         return CLI_ERROR;
@@ -2319,4 +2323,8 @@ void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, in
 {
     cli_set_idle_timeout(cli, seconds);
     cli->idle_timeout_callback = callback;
+}
+
+void cli_telnet_protocol(struct cli_def *cli, int telnet_protocol) {
+    cli->telnet_protocol = !!telnet_protocol;
 }

@@ -15,6 +15,8 @@
 #include <unistd.h>
 #include "libcli.h"
 
+// vim:sw=4 tw=120 et
+
 #define CLITEST_PORT                8000
 #define MODE_CONFIG_INT             10
 
@@ -112,8 +114,7 @@ int cmd_set(struct cli_def *cli, UNUSED(const char *command), char *argv[],
     return CLI_OK;
 }
 
-int cmd_config_int(struct cli_def *cli, UNUSED(const char *command), char *argv[],
-    int argc)
+int cmd_config_int(struct cli_def *cli, UNUSED(const char *command), char *argv[], int argc)
 {
     if (argc < 1)
     {
@@ -132,8 +133,7 @@ int cmd_config_int(struct cli_def *cli, UNUSED(const char *command), char *argv[
     return CLI_OK;
 }
 
-int cmd_config_int_exit(struct cli_def *cli, UNUSED(const char *command),
-    UNUSED(char *argv[]), UNUSED(int argc))
+int cmd_config_int_exit(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
 {
     cli_set_configmode(cli, MODE_CONFIG, NULL);
     return CLI_OK;
@@ -209,48 +209,40 @@ int main()
     cli = cli_init();
     cli_set_banner(cli, "libcli test environment");
     cli_set_hostname(cli, "router");
+    cli_telnet_protocol(cli, 1);
     cli_regular(cli, regular_callback);
     cli_regular_interval(cli, 5); // Defaults to 1 second
     cli_set_idle_timeout_callback(cli, 60, idle_timeout); // 60 second idle timeout
-    cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, NULL);
+    cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-    cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, NULL);
+    cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-    cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, NULL);
+    cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-    cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED,
-        MODE_EXEC, NULL);
+    cli_register_command(cli, NULL, "set", cmd_set, PRIVILEGE_PRIVILEGED, MODE_EXEC, NULL);
 
-    c = cli_register_command(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, NULL);
+    c = cli_register_command(cli, NULL, "show", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-    cli_register_command(cli, c, "regular", cmd_show_regular, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, "Show the how many times cli_regular has run");
+    cli_register_command(cli, c, "regular", cmd_show_regular, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                         "Show the how many times cli_regular has run");
 
-    cli_register_command(cli, c, "counters", cmd_test, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, "Show the counters that the system uses");
+    cli_register_command(cli, c, "counters", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                         "Show the counters that the system uses");
 
-    cli_register_command(cli, c, "junk", cmd_test, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, NULL);
+    cli_register_command(cli, c, "junk", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-    cli_register_command(cli, NULL, "interface", cmd_config_int,
-        PRIVILEGE_PRIVILEGED, MODE_CONFIG, "Configure an interface");
+    cli_register_command(cli, NULL, "interface", cmd_config_int, PRIVILEGE_PRIVILEGED, MODE_CONFIG,
+                         "Configure an interface");
 
-    cli_register_command(cli, NULL, "exit", cmd_config_int_exit,
-        PRIVILEGE_PRIVILEGED, MODE_CONFIG_INT,
-        "Exit from interface configuration");
+    cli_register_command(cli, NULL, "exit", cmd_config_int_exit, PRIVILEGE_PRIVILEGED, MODE_CONFIG_INT,
+                         "Exit from interface configuration");
 
-    cli_register_command(cli, NULL, "address", cmd_test, PRIVILEGE_PRIVILEGED,
-        MODE_CONFIG_INT, "Set IP address");
+    cli_register_command(cli, NULL, "address", cmd_test, PRIVILEGE_PRIVILEGED, MODE_CONFIG_INT, "Set IP address");
 
-    c = cli_register_command(cli, NULL, "debug", NULL, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, NULL);
+    c = cli_register_command(cli, NULL, "debug", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-    cli_register_command(cli, c, "regular", cmd_debug_regular, PRIVILEGE_UNPRIVILEGED,
-        MODE_EXEC, "Enable cli_regular() callback debugging");
+    cli_register_command(cli, c, "regular", cmd_debug_regular, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                         "Enable cli_regular() callback debugging");
 
     cli_set_auth_callback(cli, check_auth);
     cli_set_enable_callback(cli, check_enable);
