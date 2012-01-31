@@ -1,6 +1,8 @@
 #ifndef __LIBCLI_H__
 #define __LIBCLI_H__
 
+// vim:sw=4 tw=120 et
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -9,24 +11,24 @@ extern "C" {
 #include <stdarg.h>
 #include <sys/time.h>
 
-#define CLI_OK			0
-#define CLI_ERROR		-1
-#define CLI_QUIT		-2
-#define CLI_ERROR_ARG		-3
+#define CLI_OK                  0
+#define CLI_ERROR               -1
+#define CLI_QUIT                -2
+#define CLI_ERROR_ARG           -3
 
-#define MAX_HISTORY		256
+#define MAX_HISTORY             256
 
-#define PRIVILEGE_UNPRIVILEGED	0
-#define PRIVILEGE_PRIVILEGED	15
-#define MODE_ANY		-1
-#define MODE_EXEC		0
-#define MODE_CONFIG		1
+#define PRIVILEGE_UNPRIVILEGED  0
+#define PRIVILEGE_PRIVILEGED    15
+#define MODE_ANY                -1
+#define MODE_EXEC               0
+#define MODE_CONFIG             1
 
-#define LIBCLI_HAS_ENABLE	1
+#define LIBCLI_HAS_ENABLE       1
 
-#define PRINT_PLAIN		0
-#define PRINT_FILTERED		0x01
-#define PRINT_BUFFERED		0x02
+#define PRINT_PLAIN             0
+#define PRINT_FILTERED          0x01
+#define PRINT_BUFFERED          0x02
 
 #define CLI_MAX_LINE_LENGTH     4096
 #define CLI_MAX_LINE_WORDS      128
@@ -83,7 +85,9 @@ struct cli_command {
 
 struct cli_def *cli_init();
 int cli_done(struct cli_def *cli);
-struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command, int (*callback)(struct cli_def *, const char *, char **, int), int privilege, int mode, const char *help);
+struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command,
+                                         int (*callback)(struct cli_def *, const char *, char **, int), int privilege,
+                                         int mode, const char *help);
 int cli_unregister_command(struct cli_def *cli, const char *command);
 int cli_run_command(struct cli_def *cli, const char *command);
 int cli_loop(struct cli_def *cli, int sockfd);

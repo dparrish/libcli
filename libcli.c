@@ -21,13 +21,16 @@
 #endif
 #include "libcli.h"
 
-// vim:sw=4 ts=8
+// vim:sw=4 tw=120 et
 
 #ifdef __GNUC__
 # define UNUSED(d) d __attribute__ ((unused))
 #else
 # define UNUSED(d) d
 #endif
+
+#define MATCH_REGEX     1
+#define MATCH_INVERT    2
 
 #ifdef WIN32
 /*
@@ -38,7 +41,7 @@ int read(int fd, void *buf, unsigned int count) {
     return recv(fd, buf, count, 0);
 }
 
-int write(int fd,const void *buf, unsigned int count) {
+int write(int fd, const void *buf, unsigned int count) {
     return send(fd, buf, count, 0);
 }
 
@@ -91,9 +94,9 @@ int regex_dummy() {return 0;};
 #define regexec(...) regex_dummy()
 #define regcomp(...) regex_dummy()
 #define regex_t int
-#define REG_NOSUB	0
-#define REG_EXTENDED	0
-#define REG_ICASE	0
+#define REG_NOSUB       0
+#define REG_EXTENDED    0
+#define REG_ICASE       0
 #endif
 
 enum cli_states {
@@ -145,7 +148,7 @@ static ssize_t _write(int fd, const void *buf, size_t count)
     while (count != written)
     {
         thisTime = write(fd, (char*)buf + written, count - written);
-        if (thisTime == -1) 
+        if (thisTime == -1)
         {
             if (errno == EINTR)
                 continue;
@@ -215,7 +218,9 @@ void cli_allow_user(struct cli_def *cli, const char *username, const char *passw
     n->next = NULL;
 
     if (!cli->users)
+    {
         cli->users = n;
+    }
     else
     {
         for (u = cli->users; u && u->next; u = u->next);
@@ -282,19 +287,17 @@ static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
     for (c = commands; c; c = c->next)
     {
         c->unique_len = strlen(c->command);
-        if ((c->mode != MODE_ANY && c->mode != cli->mode) ||
-            c->privilege > cli->privilege)
+        if ((c->mode != MODE_ANY && c->mode != cli->mode) || c->privilege > cli->privilege)
             continue;
 
         c->unique_len = 1;
         for (p = commands; p; p = p->next)
         {
             if (c == p)
-                    continue;
+                continue;
 
-            if ((p->mode != MODE_ANY && p->mode != cli->mode) ||
-                p->privilege > cli->privilege)
-                    continue;
+            if ((p->mode != MODE_ANY && p->mode != cli->mode) || p->privilege > cli->privilege)
+                continue;
 
             cp = c->command;
             pp = p->command;
@@ -364,10 +367,9 @@ int cli_set_configmode(struct cli_def *cli, int mode, const char *config_desc)
     return old;
 }
 
-struct cli_command *cli_register_command(struct cli_def *cli,
-    struct cli_command *parent, const char *command,
-    int (*callback)(struct cli_def *cli, const char *, char **, int),
-    int privilege, int mode, const char *help)
+struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command, int
+                                         (*callback)(struct cli_def *cli, const char *, char **, int), int privilege,
+                                         int mode, const char *help)
 {
     struct cli_command *c, *p;
 
@@ -381,9 +383,8 @@ struct cli_command *cli_register_command(struct cli_def *cli,
     c->parent = parent;
     c->privilege = privilege;
     c->mode = mode;
-    if (help)
-        if (!(c->help = strdup(help)))
-            return NULL;
+    if (help && !(c->help = strdup(help)))
+        return NULL;
 
     if (parent)
     {
@@ -414,7 +415,7 @@ struct cli_command *cli_register_command(struct cli_def *cli,
 
 static void cli_free_command(struct cli_command *cmd)
 {
-    struct cli_command *c,*p;
+    struct cli_command *c, *p;
 
     for (c = cmd->children; c;)
     {
@@ -572,12 +573,16 @@ struct cli_def *cli_init()
     cli_register_command(cli, 0, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
     cli_register_command(cli, 0, "logout", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
     cli_register_command(cli, 0, "exit", cli_int_exit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Exit from current mode");
-    cli_register_command(cli, 0, "history", cli_int_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show a list of previously run commands");
-    cli_register_command(cli, 0, "enable", cli_int_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Turn on privileged commands");
-    cli_register_command(cli, 0, "disable", cli_int_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Turn off privileged commands");
+    cli_register_command(cli, 0, "history", cli_int_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                         "Show a list of previously run commands");
+    cli_register_command(cli, 0, "enable", cli_int_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                         "Turn on privileged commands");
+    cli_register_command(cli, 0, "disable", cli_int_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC,
+                         "Turn off privileged commands");
 
     c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
-    cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Configure from the terminal");
+    cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC,
+                         "Configure from the terminal");
 
     cli->privilege = cli->mode = -1;
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -769,7 +774,8 @@ static char *join_words(int argc, char **argv)
     return p;
 }
 
-static int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_words, char *words[], int start_word, int filters[])
+static int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_words, char *words[],
+                            int start_word, int filters[])
 {
     struct cli_command *c, *again = NULL;
     int c_words = num_words;
@@ -786,7 +792,8 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
         int l = strlen(words[start_word])-1;
 
         if (commands->parent && commands->parent->callback)
-            cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),  (commands->parent->help != NULL ? commands->parent->help : ""));
+            cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),
+                      (commands->parent->help != NULL ? commands->parent->help : ""));
 
         for (c = commands; c; c = c->next)
         {
@@ -848,7 +855,8 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
                     }
                     else
                     {
-                        cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", words[start_word]);
+                        cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command",
+                                  words[start_word]);
                     }
                 }
                 return rc;
@@ -885,11 +893,8 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
                     if (argc == 1)
                     {
                         int i;
-
-                        for(i = 0; filter_cmds[i].cmd; i++)
-                        {
+                        for (i = 0; filter_cmds[i].cmd; i++)
                             cli_error(cli, "  %-20s %s", filter_cmds[i].cmd, filter_cmds[i].help );
-                        }
                     }
                     else
                     {
@@ -910,14 +915,11 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
                 }
                 *filt = calloc(sizeof(struct cli_filter), 1);
 
-                if (!strncmp("include", argv[0], len) ||
-                    !strncmp("exclude", argv[0], len) ||
-                    !strncmp("grep", argv[0], len) ||
-                    !strncmp("egrep", argv[0], len))
-                        rc = cli_match_filter_init(cli, argc, argv, *filt);
-                else if (!strncmp("begin", argv[0], len) ||
-                    !strncmp("between", argv[0], len))
-                        rc = cli_range_filter_init(cli, argc, argv, *filt);
+                if (!strncmp("include", argv[0], len) || !strncmp("exclude", argv[0], len) ||
+                    !strncmp("grep", argv[0], len) || !strncmp("egrep", argv[0], len))
+                    rc = cli_match_filter_init(cli, argc, argv, *filt);
+                else if (!strncmp("begin", argv[0], len) || !strncmp("between", argv[0], len))
+                    rc = cli_range_filter_init(cli, argc, argv, *filt);
                 else if (!strncmp("count", argv[0], len))
                     rc = cli_count_filter_init(cli, argc, argv, *filt);
                 else
@@ -1027,7 +1029,7 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
         num_words++;
 
     if (!num_words)
-            return 0;
+        return 0;
 
     for (i = 0; i < num_words; i++)
     {
@@ -1046,9 +1048,10 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
             len = strlen(words[num_words-1]);
 
         for (i = 0; filter_cmds[i].cmd && k < max_completions; i++)
-            if (!len || (len < strlen(filter_cmds[i].cmd)
-                && !strncmp(filter_cmds[i].cmd, words[num_words - 1], len)))
-                    completions[k++] = (char *)filter_cmds[i].cmd;
+        {
+            if (!len || (len < strlen(filter_cmds[i].cmd) && !strncmp(filter_cmds[i].cmd, words[num_words - 1], len)))
+                completions[k++] = (char *)filter_cmds[i].cmd;
+        }
 
         completions[k] = NULL;
         return k;
@@ -1070,7 +1073,7 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
         if (i < num_words - 1)
         {
             if (strlen(words[i]) < c->unique_len)
-                    continue;
+                continue;
 
             n = c->children;
             i++;
@@ -1086,10 +1089,17 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
 static void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
 {
     int i;
-    if (cursor < l) for (i = 0; i < (l - cursor); i++) _write(sockfd, " ", 1);
-    for (i = 0; i < l; i++) cmd[i] = '\b';
-    for (; i < l * 2; i++) cmd[i] = ' ';
-    for (; i < l * 3; i++) cmd[i] = '\b';
+    if (cursor < l)
+    {
+        for (i = 0; i < (l - cursor); i++)
+            _write(sockfd, " ", 1);
+    }
+    for (i = 0; i < l; i++)
+        cmd[i] = '\b';
+    for (; i < l * 2; i++)
+        cmd[i] = ' ';
+    for (; i < l * 3; i++)
+        cmd[i] = '\b';
     _write(sockfd, cmd, i);
     memset((char *)cmd, 0, i);
     l = cursor = 0;
@@ -1175,7 +1185,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
     /*
      * OMG, HACK
      */
-    if (!(cli->client = fdopen(_open_osfhandle(sockfd,0), "w+")))
+    if (!(cli->client = fdopen(_open_osfhandle(sockfd, 0), "w+")))
         return CLI_ERROR;
     cli->client->_file = sockfd;
 #else
@@ -1962,7 +1972,7 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
         if ((n = vsnprintf(cli->buffer, cli->buf_size, format, ap)) == -1)
             return;
 
-        if (((unsigned)n) >= cli->buf_size)
+        if ((unsigned)n >= cli->buf_size)
         {
             cli->buf_size = n + 1;
             cli->buffer = realloc(cli->buffer, cli->buf_size);
@@ -2047,8 +2057,6 @@ void cli_error(struct cli_def *cli, const char *format, ...)
 struct cli_match_filter_state
 {
     int flags;
-#define MATCH_REGEX                1
-#define MATCH_INVERT                2
     union {
         char *string;
         regex_t re;
@@ -2073,8 +2081,7 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
     filt->filter = cli_match_filter;
     filt->data = state = calloc(sizeof(struct cli_match_filter_state), 1);
 
-    if (argv[0][0] == 'i' || // include/exclude
-        (argv[0][0] == 'e' && argv[0][1] == 'x'))
+    if (argv[0][0] == 'i' || (argv[0][0] == 'e' && argv[0][1] == 'x'))  // include/exclude
     {
         if (argv[0][0] == 'e')
             state->flags = MATCH_INVERT;
@@ -2302,7 +2309,8 @@ void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, 
 
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds)
 {
-    if (seconds < 1) seconds = 0;
+    if (seconds < 1)
+        seconds = 0;
     cli->idle_timeout = seconds;
     time(&cli->last_action);
 }
