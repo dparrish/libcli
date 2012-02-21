@@ -60,7 +60,7 @@ struct cli_def {
     char *buffer;
     unsigned buf_size;
     struct timeval timeout_tm;
-    unsigned int idle_timeout;
+    time_t idle_timeout;
     int (*idle_timeout_callback)(struct cli_def *);
     time_t last_action;
     int telnet_protocol;
