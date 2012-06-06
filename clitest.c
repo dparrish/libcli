@@ -29,6 +29,11 @@
 unsigned int regular_count = 0;
 unsigned int debug_regular = 0;
 
+struct my_context {
+  int value;
+  char* message;
+};
+
 #ifdef WIN32
 typedef int socklen_t;
 
@@ -152,6 +157,13 @@ int cmd_debug_regular(struct cli_def *cli, UNUSED(const char *command), char *ar
     return CLI_OK;
 }
 
+int cmd_context(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
+{
+    struct my_context *myctx = (struct my_context *)cli_get_context(cli);
+    cli_print(cli, "User context has a value of %d and message saying %s", myctx->value, myctx->message);
+    return CLI_OK;
+}
+
 int check_auth(const char *username, const char *password)
 {
     if (strcasecmp(username, "fred") != 0)
@@ -206,6 +218,12 @@ int main()
     }
 #endif
 
+    // Prepare a small user context
+    char mymessage[] = "I contain user data!";
+    struct my_context myctx;
+    myctx.value = 5;
+    myctx.message = mymessage;
+
     cli = cli_init();
     cli_set_banner(cli, "libcli test environment");
     cli_set_hostname(cli, "router");
@@ -243,6 +261,11 @@ int main()
 
     cli_register_command(cli, c, "regular", cmd_debug_regular, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                          "Enable cli_regular() callback debugging");
+
+    // Set user context and its command
+    cli_set_context(cli, (void*)&myctx);
+    cli_register_command(cli, NULL, "context", cmd_context, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                         "Test a user-specified context");
 
     cli_set_auth_callback(cli, check_auth);
     cli_set_enable_callback(cli, check_enable);

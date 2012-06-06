@@ -94,6 +94,9 @@ cli_unregister_command(command).
 You can use this to build dynamic command trees.
 
 
+It is possible to carry along a user-defined context to all command callbacks
+using cli_set_context(cli, context) and cli_get_context(cli) functions.
+
 
 You are responsible for accepting a TCP connection, and for creating a
 process or thread to run the cli.  Once you are ready to process the

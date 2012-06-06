@@ -2328,3 +2328,11 @@ void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, in
 void cli_telnet_protocol(struct cli_def *cli, int telnet_protocol) {
     cli->telnet_protocol = !!telnet_protocol;
 }
+
+void cli_set_context(struct cli_def *cli, void *context) {
+    cli->user_context = context;
+}
+
+void *cli_get_context(struct cli_def *cli) {
+    return cli->user_context;
+}
