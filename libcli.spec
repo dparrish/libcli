@@ -1,4 +1,4 @@
-Version: 1.9.6
+Version: 1.9.7
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -36,6 +36,9 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Mon Feb  1 2010 David Parrish <david@dparrish.com> 1.9.7-1
+- Fix memory leak in cli_get_completions - fengxj325@gmail.com
+
 * Tue Jun  5 2012 Teemu Karimerto <teemu.karimerto@steo.fi> 1.9.6-1
 - Added a user-definable context to struct cli_def
 - Added cli_set_context/cli_get_context for user context handling
