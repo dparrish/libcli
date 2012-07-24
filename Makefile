@@ -6,8 +6,11 @@ MAJOR = 1
 MINOR = 9
 REVISION = 7
 LIB = libcli.so
+LIB_STATIC = libcli.a
 
 CC = gcc
+AR = ar
+ARFLAGS = rcs
 DEBUG = -g
 OPTIM = -O3
 CFLAGS += $(DEBUG) $(OPTIM) -Wall -std=c99 -pedantic -Wformat-security -Wno-format-zero-length -Werror -Wwrite-strings -Wformat -fdiagnostics-show-option -Wextra -Wsign-compare -Wcast-align -Wno-unused-parameter
@@ -21,13 +24,16 @@ LDFLAGS += -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
 LIBS = -lcrypt
 endif
 
-all: $(LIB) clitest
+all: $(LIB) $(LIB_STATIC) clitest
 
 $(LIB): libcli.o
 	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
 	-rm -f $(LIB) $(LIB).$(MAJOR).$(MINOR)
 	ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR)
 	ln -s $(LIB).$(MAJOR).$(MINOR) $(LIB)
+
+$(LIB_STATIC): libcli.o
+	$(AR) $(ARFLAGS) $@ $^
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -o $@ -c $<
@@ -41,7 +47,7 @@ clitest.exe: clitest.c libcli.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< libcli.o -lws2_32
 
 clean:
-	rm -f *.o $(LIB)* clitest
+	rm -f *.o $(LIB)* $(LIB_STATIC) clitest
 
 install: $(LIB)
 	install -d $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib
