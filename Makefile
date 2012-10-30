@@ -54,8 +54,8 @@ install: $(LIB)
 	install -m 0644 libcli.h $(DESTDIR)$(PREFIX)/include
 	install -m 0755 $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(DESTDIR)$(PREFIX)/lib
 	cd $(DESTDIR)$(PREFIX)/lib && \
-	    ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR) && \
-	    ln -s $(LIB).$(MAJOR).$(MINOR) $(LIB)
+	    ln -fs $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR) && \
+	    ln -fs $(LIB).$(MAJOR).$(MINOR) $(LIB)
 
 rpm:
 	mkdir libcli-$(MAJOR).$(MINOR).$(REVISION)
