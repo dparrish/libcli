@@ -778,7 +778,7 @@ static char *join_words(int argc, char **argv)
 static int cli_find_command(struct cli_def *cli, struct cli_command *commands, int num_words, char *words[],
                             int start_word, int filters[])
 {
-    struct cli_command *c, *again = NULL;
+    struct cli_command *c, *again_config = NULL, *again_any = NULL;
     int c_words = num_words;
 
     if (filters[0])
@@ -820,7 +820,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
             continue;
 
         AGAIN:
-        if (c->mode == cli->mode || c->mode == MODE_ANY)
+        if (c->mode == cli->mode || (c->mode == MODE_ANY && again_any != NULL))
         {
             int rc = CLI_OK;
             int f;
@@ -959,15 +959,26 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
         {
             // command matched but from another mode,
             // remember it if we fail to find correct command
-            again = c;
+            again_config = c;
+        }
+        else if (c->mode == MODE_ANY)
+        {
+            // command matched but for any mode,
+            // remember it if we fail to find correct command
+            again_any = c;
         }
     }
 
     // drop out of config submode if we have matched command on MODE_CONFIG
-    if (again)
+    if (again_config)
     {
-        c = again;
+        c = again_config;
         cli_set_configmode(cli, MODE_CONFIG, NULL);
+        goto AGAIN;
+    }
+    if (again_any)
+    {
+        c = again_any;
         goto AGAIN;
     }
 
