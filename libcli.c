@@ -19,6 +19,7 @@
 #ifndef WIN32
 #include <regex.h>
 #endif
+#include <poll.h>
 #include "libcli.h"
 
 // vim:sw=4 tw=120 et
@@ -1256,7 +1257,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
         while (1)
         {
             int sr;
-            fd_set r;
+            struct pollfd fds;
             if (cli->showprompt)
             {
                 if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
@@ -1293,16 +1294,18 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 cli->showprompt = 0;
             }
 
-            FD_ZERO(&r);
-            FD_SET(sockfd, &r);
+            fds.fd = sockfd;
+            fds.events = POLLIN;
+            fds.revents = 0;
 
-            if ((sr = select(sockfd + 1, &r, NULL, NULL, &tm)) < 0)
+            sr = poll(&fds, 1, ((tm.tv_usec / 1000) /* usec -> msec */ + (tm.tv_sec * 1000)/* sec -> msec */));
+            if (sr < 0)
             {
-                /* select error */
+                /* poll error */
                 if (errno == EINTR)
                     continue;
 
-                perror("select");
+                perror("poll");
                 l = -1;
                 break;
             }
@@ -1337,6 +1340,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 }
 
                 memcpy(&tm, &cli->timeout_tm, sizeof(tm));
+                continue;
+            }
+
+            if ((sr != 1) || ((fds.revents & POLLIN) == 0)) {
                 continue;
             }
 
