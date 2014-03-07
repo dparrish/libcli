@@ -18,6 +18,7 @@
 #include <time.h>
 #ifndef WIN32
 #include <regex.h>
+#include <termios.h>
 #endif
 #include "libcli.h"
 
@@ -141,13 +142,33 @@ static struct cli_filter_cmds filter_cmds[] =
     { NULL, NULL}
 };
 
+int _read(int fd, void *buf, unsigned int count)
+{
+#ifndef WIN32
+    if (!fd)
+        fd = STDIN_FILENO;
+#endif
+
+    return read(fd, buf, count);
+}
+
 static ssize_t _write(int fd, const void *buf, size_t count)
 {
     size_t written = 0;
-    ssize_t thisTime =0;
+    ssize_t thisTime = 0;
+
+#ifndef WIN32
+    if (!fd)
+        fd = STDOUT_FILENO;
+#endif
+
     while (count != written)
     {
         thisTime = write(fd, (char*)buf + written, count - written);
+#ifndef WIN32
+        if (isatty(fd))
+            tcflush(fd, TCOFLUSH);
+#endif
         if (thisTime == -1)
         {
             if (errno == EINTR)
@@ -157,8 +178,48 @@ static ssize_t _write(int fd, const void *buf, size_t count)
         }
         written += thisTime;
     }
+
     return written;
 }
+
+#ifndef WIN32
+static struct termios term_org;
+static int term_changed = 0;
+
+static void cli_restore_terminal()
+{
+    if (term_changed) {
+        tcsetattr(0, TCSANOW, &term_org);
+        term_changed = 0;
+    }
+}
+
+static void cli_set_terminal()
+{
+    struct termios term;
+
+    if (tcgetattr(0, &term_org) != 0)
+        perror("tcgetattr");
+    else {
+        term = term_org;
+
+        term.c_iflag |= INLCR;
+        term.c_iflag &= ~ICRNL;
+        term.c_lflag &= ~ICANON;
+        term.c_lflag &= ~ECHO;
+        term.c_cc[VMIN] = 0;
+        term.c_cc[VTIME] = 0;
+
+        if (tcsetattr(0, TCSANOW, &term))
+            perror("tcsetattr");
+        else {
+            term_changed = 1;
+            atexit(cli_restore_terminal); /* restore terminal settings upon exit */
+        }
+    }
+}
+#endif
+
 char *cli_command_name(struct cli_def *cli, struct cli_command *command)
 {
     char *name = cli->commandname;
@@ -197,6 +258,7 @@ void cli_set_enable_callback(struct cli_def *cli, int (*enable_callback)(const c
 void cli_allow_user(struct cli_def *cli, const char *username, const char *password)
 {
     struct unp *u, *n;
+
     if (!(n = malloc(sizeof(struct unp))))
     {
         fprintf(stderr, "Couldn't allocate memory for user: %s", strerror(errno));
@@ -240,7 +302,10 @@ void cli_allow_enable(struct cli_def *cli, const char *password)
 void cli_deny_user(struct cli_def *cli, const char *username)
 {
     struct unp *u, *p = NULL;
-    if (!cli->users) return;
+
+    if (!cli->users)
+        return;
+
     for (u = cli->users; u; u = u->next)
     {
         if (strcmp(username, u->username) == 0)
@@ -1160,6 +1225,7 @@ static int pass_matches(const char *pass, const char *try)
     return !strcmp(pass, try);
 }
 
+#undef  CTRL
 #define CTRL(c) (c - '@')
 
 static int show_prompt(struct cli_def *cli, int sockfd)
@@ -1167,12 +1233,12 @@ static int show_prompt(struct cli_def *cli, int sockfd)
     int len = 0;
 
     if (cli->hostname)
-        len += write(sockfd, cli->hostname, strlen(cli->hostname));
+        len += _write(sockfd, cli->hostname, strlen(cli->hostname));
 
     if (cli->modestring)
-        len += write(sockfd, cli->modestring, strlen(cli->modestring));
+        len += _write(sockfd, cli->modestring, strlen(cli->modestring));
 
-    return len + write(sockfd, cli->promptchar, strlen(cli->promptchar));
+    return len + _write(sockfd, cli->promptchar, strlen(cli->promptchar));
 }
 
 int cli_loop(struct cli_def *cli, int sockfd)
@@ -1187,7 +1253,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
     cli->state = STATE_LOGIN;
 
     cli_free_history(cli);
-    if (cli->telnet_protocol)
+    if (cli->telnet_protocol && sockfd)
     {
         static const char *negotiate =
             "\xFF\xFB\x03"
@@ -1204,15 +1270,23 @@ int cli_loop(struct cli_def *cli, int sockfd)
     /*
      * OMG, HACK
      */
+    if (!sockfd)
+        return CLI_ERROR;
     if (!(cli->client = fdopen(_open_osfhandle(sockfd, 0), "w+")))
         return CLI_ERROR;
     cli->client->_file = sockfd;
 #else
-    if (!(cli->client = fdopen(sockfd, "w+")))
+    if (!sockfd)
+    {
+        cli_set_terminal();
+        cli->client = stdout;
+    }
+    else if (!(cli->client = fdopen(sockfd, "w+")))
         return CLI_ERROR;
 #endif
 
     setbuf(cli->client, NULL);
+
     if (cli->banner)
         cli_error(cli, "%s", cli->banner);
 
@@ -1340,7 +1414,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 continue;
             }
 
-            if ((n = read(sockfd, &c, 1)) < 0)
+            if ((n = _read(sockfd, &c, 1)) < 0)
             {
                 if (errno == EINTR)
                     continue;
@@ -1929,8 +2003,14 @@ int cli_loop(struct cli_def *cli, int sockfd)
     free_z(password);
     free_z(cmd);
 
-    fclose(cli->client);
+    if (cli->client != stdout)
+        fclose(cli->client);
     cli->client = 0;
+
+#ifndef WIN32
+    cli_restore_terminal();
+#endif
+
     return CLI_OK;
 }
 

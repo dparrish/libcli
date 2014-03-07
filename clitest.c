@@ -200,13 +200,14 @@ void pc(UNUSED(struct cli_def *cli), const char *string)
     printf("%s\n", string);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     struct cli_command *c;
     struct cli_def *cli;
     int s, x;
     struct sockaddr_in addr;
     int on = 1;
+    int port = CLITEST_PORT;
 
 #ifndef WIN32
     signal(SIGCHLD, SIG_IGN);
@@ -218,6 +219,10 @@ int main()
     }
 #endif
 
+    // Get port number from first argument (port == 0 means stdin/stdout)
+    if (argc > 1)
+        port = atoi(argv[1]);
+
     // Prepare a small user context
     char mymessage[] = "I contain user data!";
     struct my_context myctx;
@@ -227,7 +232,7 @@ int main()
     cli = cli_init();
     cli_set_banner(cli, "libcli test environment");
     cli_set_hostname(cli, "router");
-    cli_telnet_protocol(cli, 1);
+    cli_telnet_protocol(cli, port ? 1 : 0);
     cli_regular(cli, regular_callback);
     cli_regular_interval(cli, 5); // Defaults to 1 second
     cli_set_idle_timeout_callback(cli, 60, idle_timeout); // 60 second idle timeout
@@ -283,60 +288,67 @@ int main()
         }
     }
 
-    if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if (port == 0)
     {
-        perror("socket");
-        return 1;
+        cli_loop(cli, 0);
     }
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(CLITEST_PORT);
-    if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0)
+    else
     {
-        perror("bind");
-        return 1;
-    }
-
-    if (listen(s, 50) < 0)
-    {
-        perror("listen");
-        return 1;
-    }
-
-    printf("Listening on port %d\n", CLITEST_PORT);
-    while ((x = accept(s, NULL, 0)))
-    {
-#ifndef WIN32
-        int pid = fork();
-        if (pid < 0)
+        if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         {
-            perror("fork");
+            perror("socket");
+            return 1;
+        }
+        setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        addr.sin_port = htons(port);
+        if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0)
+        {
+            perror("bind");
             return 1;
         }
 
-        /* parent */
-        if (pid > 0)
+        if (listen(s, 50) < 0)
         {
-            socklen_t len = sizeof(addr);
-            if (getpeername(x, (struct sockaddr *) &addr, &len) >= 0)
-                printf(" * accepted connection from %s\n", inet_ntoa(addr.sin_addr));
-
-            close(x);
-            continue;
+            perror("listen");
+            return 1;
         }
 
-        /* child */
-        close(s);
-        cli_loop(cli, x);
-        exit(0);
+        printf("Listening on port %d\n", port);
+        while ((x = accept(s, NULL, 0)))
+        {
+#ifndef WIN32
+            int pid = fork();
+            if (pid < 0)
+            {
+                perror("fork");
+                return 1;
+            }
+
+            /* parent */
+            if (pid > 0)
+            {
+                socklen_t len = sizeof(addr);
+                if (getpeername(x, (struct sockaddr *) &addr, &len) >= 0)
+                    printf(" * accepted connection from %s\n", inet_ntoa(addr.sin_addr));
+
+                close(x);
+                continue;
+            }
+
+            /* child */
+            close(s);
+            cli_loop(cli, x);
+            exit(0);
 #else
-        cli_loop(cli, x);
-        shutdown(x, SD_BOTH);
-        close(x);
+            cli_loop(cli, x);
+            shutdown(x, SD_BOTH);
+            close(x);
 #endif
+        }
     }
 
     cli_done(cli);
