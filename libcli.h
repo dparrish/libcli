@@ -125,6 +125,9 @@ void cli_telnet_protocol(struct cli_def *cli, int telnet_protocol);
 void cli_set_context(struct cli_def *cli, void *context);
 void *cli_get_context(struct cli_def *cli);
 
+//CUSTOM FUNCTION
+char * cli_get_cmd_help(struct cli_def *cli, const char * cmd);
+
 #ifdef __cplusplus
 }
 #endif

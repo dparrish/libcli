@@ -723,7 +723,7 @@ static int cli_parse_line(const char *line, char *words[], int max_words)
             inquote = 0;
             word_start = 0;
         }
-        else if (*p == '"' || *p == '\'')
+        else if (0 == inquote && ( *p == '"' || *p == '\'' ) )
         {
             inquote = *p++;
             word_start = p;
@@ -732,9 +732,9 @@ static int cli_parse_line(const char *line, char *words[], int max_words)
         {
             if (!word_start)
             {
-                if (*p == '|')
+                if ( *p == '|' )
                 {
-                    if (!(words[nwords++] = strdup("|")))
+                    if (!(words[nwords++] = strdup("||")))
                         return 0;
                 }
                 else if (!isspace(*p))
@@ -1005,7 +1005,7 @@ int cli_run_command(struct cli_def *cli, const char *command)
     num_words = cli_parse_line(command, words, CLI_MAX_LINE_WORDS);
     for (i = f = 0; i < num_words && f < CLI_MAX_LINE_WORDS - 1; i++)
     {
-        if (words[i][0] == '|')
+        if ( (words[i][0] == '|') && (words[i][1] == '|') )
         filters[f++] = i;
     }
 
@@ -2358,3 +2358,35 @@ void cli_set_context(struct cli_def *cli, void *context) {
 void *cli_get_context(struct cli_def *cli) {
     return cli->user_context;
 }
+
+//CUSTOM FUNCTION
+char * cli_get_cmd_help(struct cli_def *cli, const char * cmd)
+{
+    char *help = NULL , *words[CLI_MAX_LINE_WORDS] = { 0 };
+    struct cli_command *c ;
+    int i, num_words = 0 , ii ;
+
+    num_words = cli_parse_line(cmd, words, CLI_MAX_LINE_WORDS);
+
+    for ( ii = 0 , c = cli->commands ; (c != NULL) && (ii < num_words) ; /* done in loop */ )
+    {
+        if (    ( (c->mode == cli->mode) || (c->mode == MODE_ANY) )
+             && ( 0 == strncasecmp(c->command, words[ii], c->unique_len) )
+             && ( 0 == strncasecmp(c->command, words[ii], strlen(words[ii])) ) )
+        {
+            help = c->help ;
+            c = c->children ;
+            ++ii ;
+        }
+        else
+        {
+            c = c->next ;
+        }
+    }
+
+    for ( i = 0 ; i < num_words ; ++i )
+        free(words[i]);
+
+    return ( ii == num_words ) ? help : NULL ;
+}
+

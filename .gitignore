@@ -3,3 +3,5 @@
 *.so
 *.so.*
 clitest
+.cproject
+.project
