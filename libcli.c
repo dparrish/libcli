@@ -1421,6 +1421,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
                         default:
                             c = 0;
+                            break ;
                     }
 
                     esc = 0;
@@ -2390,3 +2391,24 @@ char * cli_get_cmd_help(struct cli_def *cli, const char * cmd)
     return ( ii == num_words ) ? help : NULL ;
 }
 
+int cli_unregister_subcommand(struct cli_def *cli, const char *command, struct cli_command * parent)
+{
+    struct cli_command **c, *p = NULL;
+
+    if (!command) return -1;
+    if (!parent) return cli_unregister_command( cli, command ) ;
+    if (!cli->commands) return CLI_OK;
+
+    for (c = &parent->children; *c; c = &p->next)
+    {
+        p = *c;
+        if (strcmp(p->command, command) == 0)
+        {
+            *c = p->next; //update pointer in container
+            cli_free_command(p);
+            return CLI_OK;
+        }
+    }
+
+    return CLI_OK;
+}
