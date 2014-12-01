@@ -2371,7 +2371,8 @@ char * cli_get_cmd_help(struct cli_def *cli, const char * cmd)
 
     for ( ii = 0 , c = cli->commands ; (c != NULL) && (ii < num_words) ; /* done in loop */ )
     {
-        if (    ( (c->mode == cli->mode) || (c->mode == MODE_ANY) )
+        if (    ( c->privilege == cli->privilege )
+             && ( (c->mode == cli->mode) || (c->mode == MODE_ANY) )
              && ( 0 == strncasecmp(c->command, words[ii], c->unique_len) )
              && ( 0 == strncasecmp(c->command, words[ii], strlen(words[ii])) ) )
         {
@@ -2391,7 +2392,8 @@ char * cli_get_cmd_help(struct cli_def *cli, const char * cmd)
     return ( ii == num_words ) ? help : NULL ;
 }
 
-int cli_unregister_subcommand(struct cli_def *cli, const char *command, struct cli_command * parent)
+int cli_unregister_subcommand(struct cli_def *cli,
+        struct cli_command * parent, const char *command, int privilege, int mode )
 {
     struct cli_command **c, *p = NULL;
 
@@ -2402,7 +2404,8 @@ int cli_unregister_subcommand(struct cli_def *cli, const char *command, struct c
     for (c = &parent->children; *c; c = &p->next)
     {
         p = *c;
-        if (strcmp(p->command, command) == 0)
+        if (    ( p->privilege == privilege ) && ( p->mode == mode )
+             && ( 0 == strcmp(p->command, command) ) )
         {
             *c = p->next; //update pointer in container
             cli_free_command(p);

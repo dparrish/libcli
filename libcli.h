@@ -127,7 +127,8 @@ void *cli_get_context(struct cli_def *cli);
 
 //CUSTOM FUNCTION
 char * cli_get_cmd_help(struct cli_def *cli, const char * cmd);
-int cli_unregister_subcommand(struct cli_def *cli, const char *command, struct cli_command * parent) ;
+int cli_unregister_subcommand(struct cli_def *cli,
+        struct cli_command * parent, const char *command, int privilege, int mode );
 
 #ifdef __cplusplus
 }
