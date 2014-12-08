@@ -123,5 +123,14 @@ Call cli_done() to free the data structures.
 
 
 - David Parrish (david@dparrish.com)
-- Kevin Barrett (kevin@baymicrosystems.com)
+
+
+Fork: https://github.com/kevkeys/libcli
+Maintainer:  Kevin Barrett <kevin@baymicrosystems.com>
+
+Changelog:
+
+2014-Dec-05     Fork from https://github.com/dparrish/libcli
+                ID a61be59b8b7c40b3acf1dc4acaafc247da22e5d3
+2014-Dec-07     Add support for hooks for default commands
 
