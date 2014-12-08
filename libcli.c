@@ -1067,13 +1067,15 @@ int cli_run_command(struct cli_def *cli, const char *command)
     return CLI_OK;
 }
 
-static int cli_get_completions(struct cli_def *cli, const char *command, char **completions, int max_completions)
+static int cli_get_completions(struct cli_def *cli, const char *command, char **completions, char **user_completions, int max_completions, int max_user_completions, int *num_user_completions)
 {
     struct cli_command *c;
     struct cli_command *n;
+    struct cli_command *completed = NULL;
     int num_words, save_words, i, k=0;
     char *words[CLI_MAX_LINE_WORDS] = {0};
     int filter = 0;
+    int completed_i = 0;
 
     if (!command) return 0;
     while (isspace(*command))
@@ -1132,10 +1134,28 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
 
             n = c->children;
             i++;
+            completed = c;
+            completed_i = i;
             continue;
         }
 
         completions[k++] = c->command;
+    }
+
+    if (completed && !k)
+    {
+        // Consult parameter completion callback.  Callback and corresponding "free" must be defined.
+        if (completed->get_completions)
+        {
+            if (cli->user_completion_free)
+            {
+                *num_user_completions = completed->get_completions(cli, completed->command, words + completed_i, num_words - completed_i, user_completions, max_user_completions);
+            }
+            else
+            {
+                cli_error(cli, "Internal server error processing tab completion");
+            }
+        }
     }
 
 out:
@@ -1637,15 +1657,28 @@ int cli_loop(struct cli_def *cli, int sockfd)
             /* TAB completion */
             if (c == CTRL('I'))
             {
-                char *completions[CLI_MAX_LINE_WORDS];
+                char *completions[CLI_MAX_LINE_WORDS * 2];
+                char *user_completions[CLI_MAX_LINE_WORDS];
                 int num_completions = 0;
+                int num_user_completions = 0;
 
                 if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
                     continue;
 
                 if (cursor != l) continue;
 
-                num_completions = cli_get_completions(cli, cmd, completions, CLI_MAX_LINE_WORDS);
+                num_completions = cli_get_completions(cli, cmd, completions, user_completions, CLI_MAX_LINE_WORDS, CLI_MAX_LINE_WORDS, &num_user_completions);
+                if (num_user_completions > 0)
+                {
+                    // Append user completions to end of the completions list
+                    int i;
+                    int ci;
+                    for (i = 0, ci = num_completions; i < num_user_completions; i++, ci++)
+                    {
+                        completions[ci] = user_completions[i];
+                    }
+                    num_completions += num_user_completions;
+                }
                 if (num_completions == 0)
                 {
                     _write(sockfd, "\a", 1);
@@ -1688,6 +1721,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     lastchar = c;
                     _write(sockfd, "\a", 1);
                 }
+
+                if (num_user_completions && cli->user_completion_free)
+                    cli->user_completion_free(user_completions, num_user_completions);
+
                 continue;
             }
 
@@ -2412,3 +2449,15 @@ int cli_register_hook(struct cli_def *cli, const char *command, hook_cb hook)
     hookp->f[hook_id] = hook;
     return 0;
 }
+
+void cli_register_completion_cb(struct cli_command *cmd,
+                                int (*callback)(struct cli_def *, const char *, char **, int, char **, int))
+{
+    cmd->get_completions = callback;
+}
+
+void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **, int))
+{
+    cli->user_completion_free = callback;
+}
+

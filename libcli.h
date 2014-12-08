@@ -69,6 +69,7 @@ struct cli_def {
     time_t last_action;
     int telnet_protocol;
     void *hooks;
+    void (*user_completion_free)(char **, int);
     void *user_context;
 };
 
@@ -85,6 +86,7 @@ struct cli_command {
     char *help;
     int privilege;
     int mode;
+    int (*get_completions)(struct cli_def *, const char *, char **, int, char **, int);
     struct cli_command *next;
     struct cli_command *children;
     struct cli_command *parent;
@@ -123,6 +125,9 @@ void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));
 int cli_register_hook(struct cli_def *cli, const char *command,
                        int (*hook)(struct cli_def *, const char *, char **, int));
+void cli_register_completion_cb(struct cli_command *cmd,
+                                int (*callback)(struct cli_def *, const char *, char **, int, char **, int));
+void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **, int));
 
 // Enable or disable telnet protocol negotiation.
 // Note that this is enabled by default and must be changed before cli_loop() is run.

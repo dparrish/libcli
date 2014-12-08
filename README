@@ -111,6 +111,25 @@ callback:
   CLI_HOOK_ERROR -- Return CLI_ERROR immediately upon completion
 
 
+Command-specific completion:
+It is possible to specify a callback for processing tab-completion on
+parameter values using the following:
+
+void cli_register_completion_cb(struct cli_command *cmd, int (*callback)(struct cli_def *, const char *, char **, int, char **, int));
+
+The completion callback is defined as follows:
+  int completion_cb(struct cli_def *cli, const char *command, char *argv[], int argc, char **completion_buf, int max_completions)
+
+In order to define a completion callback, a function must be defined to free()
+memory that it allocates.  Do this via:
+
+void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **, int));
+
+The completion-free callback is defined as follows:
+  void completion_free_cb(char **completion_buf, int num_completions)
+
+
+
 You are responsible for accepting a TCP connection, and for creating a
 process or thread to run the cli.  Once you are ready to process the
 connection, call cli_loop(cli, sock) to interact with the user on the
@@ -133,4 +152,5 @@ Changelog:
 2014-Dec-05     Fork from https://github.com/dparrish/libcli
                 ID a61be59b8b7c40b3acf1dc4acaafc247da22e5d3
 2014-Dec-07     Add support for hooks for default commands
+2014-Dec-07     Add command-specific completion
 

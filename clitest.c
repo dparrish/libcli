@@ -119,6 +119,43 @@ int cmd_set(struct cli_def *cli, UNUSED(const char *command), char *argv[],
     return CLI_OK;
 }
 
+static int intf_completion(struct cli_def *cli, const char *command, char *argv[], int argc, char **completions, int max_completions)
+{
+    // Legal interface types, terminated with empty string
+    const char intfs[][20] = { "test0/0", "" };
+
+    // Only complete on argument 1
+    if (argc > 1) return 0;
+
+    int retrieve_all = (argv[0] == NULL);       // Tab on empty argument list; return all interface names
+
+    int i = 0, c = 0;
+    while (c < max_completions && intfs[i][0] != '\0')
+    {
+        if (    retrieve_all
+             || (    strlen(argv[0]) <= strlen(intfs[i])
+                  && 0 == strncasecmp(argv[0], intfs[i], strlen(argv[0])) ) )
+        {
+            completions[c] = malloc(strlen(intfs[i]) + 1);
+            strcpy(completions[c], intfs[i]);
+            c++;
+        }
+        i++;
+    }
+
+    return c;
+}
+
+static void free_completion(char **completions, int ncompletions)
+{
+    int i;
+    char **c;
+    for (i = 0, c = completions; i < ncompletions; i++, c++)
+    {
+        if (*c) free(*c);
+    }
+}
+
 int cmd_config_int(struct cli_def *cli, UNUSED(const char *command), char *argv[], int argc)
 {
     if (argc < 1)
@@ -291,13 +328,16 @@ int main()
 
     cli_register_command(cli, c, "junk", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
-    cli_register_command(cli, NULL, "interface", cmd_config_int, PRIVILEGE_PRIVILEGED, MODE_CONFIG,
+    c = cli_register_command(cli, NULL, "interface", cmd_config_int, PRIVILEGE_PRIVILEGED, MODE_CONFIG,
                          "Configure an interface");
+
+    cli_register_completion_cb(c, intf_completion);
+    cli_register_completion_free(cli, free_completion);
 
     cli_register_command(cli, NULL, "exit", cmd_config_int_exit, PRIVILEGE_PRIVILEGED, MODE_CONFIG_INT,
                          "Exit from interface configuration");
 
-    cli_register_command(cli, NULL, "address", cmd_test, PRIVILEGE_PRIVILEGED, MODE_CONFIG_INT, "Set IP address");
+    c = cli_register_command(cli, NULL, "address", cmd_test, PRIVILEGE_PRIVILEGED, MODE_CONFIG_INT, "Set IP address");
 
     c = cli_register_command(cli, NULL, "debug", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
 
