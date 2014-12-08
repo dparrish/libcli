@@ -98,6 +98,19 @@ It is possible to carry along a user-defined context to all command callbacks
 using cli_set_context(cli, context) and cli_get_context(cli) functions.
 
 
+Hooks may be defined for default commands (help, quit, logout, exit, history,
+enable, disable) as follows:
+
+cli_register_hook(cli, "exit", hook_exit);
+
+The hook is defined the same as a command callback.  It must return one of
+the following, which defines what libcli will do upon completion of the hook
+callback:
+  CLI_HOOK_CONTINUE -- Continue with default implmentation
+  CLI_HOOK_STOP -- Return CLI_OK immediately upon completion
+  CLI_HOOK_ERROR -- Return CLI_ERROR immediately upon completion
+
+
 You are responsible for accepting a TCP connection, and for creating a
 process or thread to run the cli.  Once you are ready to process the
 connection, call cli_loop(cli, sock) to interact with the user on the
@@ -110,3 +123,5 @@ Call cli_done() to free the data structures.
 
 
 - David Parrish (david@dparrish.com)
+- Kevin Barrett (kevin@baymicrosystems.com)
+

@@ -107,6 +107,22 @@ enum cli_states {
     STATE_ENABLE
 };
 
+enum cli_hooks {
+    HOOK_HELP,
+    HOOK_QUIT,
+    HOOK_LOGOUT,
+    HOOK_EXIT,
+    HOOK_HISTORY,
+    HOOK_ENABLE,
+    HOOK_DISABLE,
+    HOOK_MAX
+};
+
+typedef int(*hook_cb)(struct cli_def *, const char *, char **, int);
+struct cli_hook {
+    hook_cb     f[HOOK_MAX];
+};
+
 struct unp {
     char *username;
     char *password;
@@ -473,8 +489,22 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
     return CLI_OK;
 }
 
-int cli_int_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
+#define SET_HOOK(cli, id, command, argv, argc)                  \
+do                                                              \
+{                                                               \
+    hook_cb h = ((struct cli_hook *)cli->hooks)->f[id];         \
+    if (h)                                                      \
+    {                                                           \
+        int hook_result = h(cli, command, argv, argc);          \
+        if (hook_result == CLI_HOOK_STOP) return CLI_OK;        \
+        if (hook_result != CLI_HOOK_CONTINUE) return CLI_ERROR; \
+    }                                                           \
+} while (0);
+
+int cli_int_enable(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
+    SET_HOOK(cli, HOOK_ENABLE, command, argv, argc);
+
     if (cli->privilege == PRIVILEGE_PRIVILEGED)
         return CLI_OK;
 
@@ -493,22 +523,25 @@ int cli_int_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char
     return CLI_OK;
 }
 
-int cli_int_disable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_disable(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
+    SET_HOOK(cli, HOOK_DISABLE, command, argv, argc);
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
     cli_set_configmode(cli, MODE_EXEC, NULL);
     return CLI_OK;
 }
 
-int cli_int_help(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_help(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
+    SET_HOOK(cli, HOOK_HELP, command, argv, argc);
     cli_error(cli, "\nCommands available:");
     cli_show_help(cli, cli->commands);
     return CLI_OK;
 }
 
-int cli_int_history(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_history(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
+    SET_HOOK(cli, HOOK_HISTORY, command, argv, argc);
     int i;
 
     cli_error(cli, "\nCommand history:");
@@ -521,8 +554,9 @@ int cli_int_history(struct cli_def *cli, UNUSED(const char *command), UNUSED(cha
     return CLI_OK;
 }
 
-int cli_int_quit(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
+int cli_int_quit(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
+    SET_HOOK(cli, HOOK_LOGOUT, command, argv, argc);
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
     cli_set_configmode(cli, MODE_EXEC, NULL);
     return CLI_QUIT;
@@ -530,6 +564,7 @@ int cli_int_quit(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *
 
 int cli_int_exit(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
+    SET_HOOK(cli, HOOK_EXIT, command, argv, argc);
     if (cli->mode == MODE_EXEC)
         return cli_int_quit(cli, command, argv, argc);
 
@@ -568,6 +603,13 @@ struct cli_def *cli_init()
         free_z(cli);
         return 0;
     }
+
+    if (!(cli->hooks = calloc(sizeof(struct cli_hook), 1)))
+    {
+        free_z(cli);
+        return 0;
+    }
+
     cli->telnet_protocol = 1;
 
     cli_register_command(cli, 0, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
@@ -647,6 +689,7 @@ int cli_done(struct cli_def *cli)
     free_z(cli->promptchar);
     free_z(cli->hostname);
     free_z(cli->buffer);
+    free_z(cli->hooks);
     free_z(cli);
 
     return CLI_OK;
@@ -2350,4 +2393,22 @@ void cli_set_context(struct cli_def *cli, void *context) {
 
 void *cli_get_context(struct cli_def *cli) {
     return cli->user_context;
+}
+
+int cli_register_hook(struct cli_def *cli, const char *command, hook_cb hook)
+{
+
+    int hook_id = -1;
+    if (!strcmp(command, "help"   )) hook_id = HOOK_HELP    ;
+    if (!strcmp(command, "quit"   )) hook_id = HOOK_QUIT    ;
+    if (!strcmp(command, "logout" )) hook_id = HOOK_LOGOUT  ;
+    if (!strcmp(command, "exit"   )) hook_id = HOOK_EXIT    ;
+    if (!strcmp(command, "history")) hook_id = HOOK_HISTORY ;
+    if (!strcmp(command, "enable" )) hook_id = HOOK_ENABLE  ;
+    if (!strcmp(command, "disable")) hook_id = HOOK_DISABLE ;
+    if (hook_id == -1) return -1;
+
+    struct cli_hook *hookp = (struct cli_hook *)cli->hooks;
+    hookp->f[hook_id] = hook;
+    return 0;
 }

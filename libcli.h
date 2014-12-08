@@ -16,6 +16,10 @@ extern "C" {
 #define CLI_QUIT                -2
 #define CLI_ERROR_ARG           -3
 
+#define CLI_HOOK_CONTINUE       0
+#define CLI_HOOK_STOP           1
+#define CLI_HOOK_ERROR          2
+
 #define MAX_HISTORY             256
 
 #define PRIVILEGE_UNPRIVILEGED  0
@@ -64,6 +68,7 @@ struct cli_def {
     int (*idle_timeout_callback)(struct cli_def *);
     time_t last_action;
     int telnet_protocol;
+    void *hooks;
     void *user_context;
 };
 
@@ -116,6 +121,8 @@ void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, 
 void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));
+int cli_register_hook(struct cli_def *cli, const char *command,
+                       int (*hook)(struct cli_def *, const char *, char **, int));
 
 // Enable or disable telnet protocol negotiation.
 // Note that this is enabled by default and must be changed before cli_loop() is run.

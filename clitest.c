@@ -200,6 +200,48 @@ void pc(UNUSED(struct cli_def *cli), const char *string)
     printf("%s\n", string);
 }
 
+static int hook_help(struct cli_def *cli, const char *command, char *argv[], int argc)
+{
+    cli_print(cli, "Hook (help): %s", command);
+    return CLI_HOOK_CONTINUE;
+}
+
+static int hook_quit(struct cli_def *cli, const char *command, char *argv[], int argc)
+{
+    cli_print(cli, "Hook (quit): %s", command);
+    return CLI_HOOK_CONTINUE;
+}
+
+static int hook_logout(struct cli_def *cli, const char *command, char *argv[], int argc)
+{
+    cli_print(cli, "Hook (logout): %s", command);
+    return CLI_HOOK_CONTINUE;
+}
+
+static int hook_exit(struct cli_def *cli, const char *command, char *argv[], int argc)
+{
+    cli_print(cli, "Hook (exit): %s", command);
+    return CLI_HOOK_CONTINUE;
+}
+
+static int hook_history(struct cli_def *cli, const char *command, char *argv[], int argc)
+{
+    cli_print(cli, "Hook (history): %s", command);
+    return CLI_HOOK_CONTINUE;
+}
+
+static int hook_enable(struct cli_def *cli, const char *command, char *argv[], int argc)
+{
+    cli_print(cli, "Hook (enable): %s", command);
+    return CLI_HOOK_CONTINUE;
+}
+
+static int hook_disable(struct cli_def *cli, const char *command, char *argv[], int argc)
+{
+    cli_print(cli, "Hook (disable): %s", command);
+    return CLI_HOOK_CONTINUE;
+}
+
 int main()
 {
     struct cli_command *c;
@@ -282,6 +324,14 @@ int main()
             fclose(fh);
         }
     }
+
+    cli_register_hook(cli, "help", hook_help);
+    cli_register_hook(cli, "quit", hook_quit);
+    cli_register_hook(cli, "logout", hook_logout);
+    cli_register_hook(cli, "exit", hook_exit);
+    cli_register_hook(cli, "history", hook_history);
+    cli_register_hook(cli, "enable", hook_enable);
+    cli_register_hook(cli, "disable", hook_disable);
 
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
