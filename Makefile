@@ -1,3 +1,10 @@
+# Build dynamic library by default
+DYNAMIC_LIB ?= 1
+# Build static library by default
+STATIC_LIB ?= 1
+# Run tests by default
+TESTS ?= 1
+
 UNAME = $(shell sh -c 'uname -s 2>/dev/null || echo not')
 DESTDIR =
 PREFIX = /usr/local
@@ -13,18 +20,25 @@ AR = ar
 ARFLAGS = rcs
 DEBUG = -g
 OPTIM = -O3
-CFLAGS += $(DEBUG) $(OPTIM) -Wall -std=c99 -pedantic -Wformat-security -Wno-format-zero-length -Werror -Wwrite-strings -Wformat -fdiagnostics-show-option -Wextra -Wsign-compare -Wcast-align -Wno-unused-parameter
-LDFLAGS += -shared
-LIBPATH += -L.
+override CFLAGS += $(DEBUG) $(OPTIM) -Wall -std=c99 -pedantic -Wformat-security -Wno-format-zero-length -Werror -Wwrite-strings -Wformat -fdiagnostics-show-option -Wextra -Wsign-compare -Wcast-align -Wno-unused-parameter
+override LDFLAGS += -shared
+override LIBPATH += -L.
 
 ifeq ($(UNAME),Darwin)
-LDFLAGS += -Wl,-install_name,$(LIB).$(MAJOR).$(MINOR)
+override LDFLAGS += -Wl,-install_name,$(LIB).$(MAJOR).$(MINOR)
 else
-LDFLAGS += -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
+override LDFLAGS += -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
 LIBS = -lcrypt
 endif
 
-all: $(LIB) $(LIB_STATIC) clitest
+ifeq (1,$(DYNAMIC_LIB))
+TARGET_LIBS += $(LIB)
+endif
+ifeq (1,$(STATIC_LIB))
+TARGET_LIBS += $(LIB_STATIC)
+endif
+
+all: $(TARGET_LIBS) $(if $(filter 1,$(TESTS)),clitest)
 
 $(LIB): libcli.o
 	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
@@ -49,13 +63,18 @@ clitest.exe: clitest.c libcli.o
 clean:
 	rm -f *.o $(LIB)* $(LIB_STATIC) clitest
 
-install: $(LIB)
+install: $(TARGET_LIBS)
 	install -d $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib
 	install -m 0644 libcli.h $(DESTDIR)$(PREFIX)/include
+  ifeq (1,$(STATIC_LIB))
+	install -m 0644 $(LIB_STATIC) $(DESTDIR)$(PREFIX)/lib
+  endif
+  ifeq (1,$(DYNAMIC_LIB))
 	install -m 0755 $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(DESTDIR)$(PREFIX)/lib
 	cd $(DESTDIR)$(PREFIX)/lib && \
 	    ln -fs $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR) && \
 	    ln -fs $(LIB).$(MAJOR).$(MINOR) $(LIB)
+  endif
 
 rpm:
 	mkdir libcli-$(MAJOR).$(MINOR).$(REVISION)
