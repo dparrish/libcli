@@ -1819,17 +1819,15 @@ int cli_loop(struct cli_def *cli, int sockfd)
             /* start of line */
             if (c == CTRL('A'))
             {
-                if (cursor)
+                if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
                 {
-                    if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                    while (cursor--)
                     {
-                        _write(sockfd, "\r", 1);
-                        show_prompt(cli, sockfd);
+                        _write(sockfd, "\b", 1);
                     }
-
-                    cursor = 0;
                 }
 
+                cursor = 0;
                 continue;
             }
 
