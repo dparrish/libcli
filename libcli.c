@@ -20,6 +20,16 @@
 #include <regex.h>
 #endif
 #include "libcli.h"
+#include <sys/epoll.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include <event2/event.h>
+#include <event2/listener.h>
+#include <assert.h>
+#include <sys/ioctl.h>
 
 // vim:sw=4 tw=120 et
 
@@ -133,6 +143,8 @@ static struct cli_filter_cmds filter_cmds[] =
 {
     { "begin",   "Begin with lines that match" },
     { "between", "Between lines that match" },
+    { "elbegin",   "Begin with lines that match and includes max of 124 lines earlier" },
+    { "elbetween", "Between lines that match and includes max of 124 lines earlier" },
     { "count",   "Count of lines"   },
     { "exclude", "Exclude lines that match" },
     { "include", "Include lines that match" },
@@ -141,7 +153,8 @@ static struct cli_filter_cmds filter_cmds[] =
     { NULL, NULL}
 };
 
-static ssize_t _write(int fd, const void *buf, size_t count)
+static ssize_t
+_write(int fd, const void *buf, size_t count)
 {
     size_t written = 0;
     ssize_t thisTime =0;
@@ -378,13 +391,18 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
 
     c->callback = callback;
     c->next = NULL;
-    if (!(c->command = strdup(command)))
+    if (!(c->command = strdup(command))) {
+        free(c);
         return NULL;
+    }
     c->parent = parent;
     c->privilege = privilege;
     c->mode = mode;
-    if (help && !(c->help = strdup(help)))
+    if (help && !(c->help = strdup(help))) {
+        free(c->command);
+        free(c);
         return NULL;
+    }
 
     if (parent)
     {
@@ -554,6 +572,48 @@ int cli_int_configure_terminal(struct cli_def *cli, UNUSED(const char *command),
     return CLI_OK;
 }
 
+int32_t
+cc_show_command_list(struct cli_def *cli,
+                     struct cli_command *cmd,
+                     char *command_path)
+{
+    int end = strlen(command_path);
+
+    if (cmd != NULL) {
+        strcat(command_path, " ");
+        strcat(command_path, cmd->command);
+
+        if (cmd->children) {
+            cc_show_command_list(cli, cmd->children, command_path);
+        } else {
+            cli_print(cli, "%s", command_path);
+        }
+
+        command_path[end]='\0';
+
+        if (cmd->next) {
+            cc_show_command_list(cli, cmd->next, command_path);
+        }
+    }
+
+    return CLI_OK;
+}
+
+int32_t
+cc_show_all_commands (struct cli_def*  cli,
+                      const char*      command,
+                      char*            argv[],
+                      int32_t          argc)
+{
+
+    struct cli_command *commands = cli->commands;
+    char command_path[512]="";
+
+    cc_show_command_list(cli, commands, command_path);
+
+    return CLI_OK;
+}
+
 struct cli_def *cli_init()
 {
     struct cli_def *cli;
@@ -584,6 +644,9 @@ struct cli_def *cli_init()
     c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
     cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC,
                          "Configure from the terminal");
+
+    cli_register_command(cli, 0, "list-commands", cc_show_all_commands, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                         "List all available commands");
 
     cli->privilege = cli->mode = -1;
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -684,7 +747,7 @@ void cli_free_history(struct cli_def *cli)
     }
 }
 
-static int cli_parse_line(const char *line, char *words[], int max_words)
+int cli_parse_line(const char *line, char *words[], int max_words)
 {
     int nwords = 0;
     const char *p = line;
@@ -914,12 +977,19 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
                     cli_error(cli, "Ambiguous filter \"%s\" (begin, between)", argv[0]);
                     return CLI_ERROR;
                 }
+                if (argv[0][0] == 'e' && argv[0][1] == 'l' && len < 3) // [elbeg]in, [elbet]ween
+                {
+                    cli_error(cli, "Ambiguous filter \"%s\" (elbegin, elbetween)", argv[0]);
+                    return CLI_ERROR;
+                }
+
                 *filt = calloc(sizeof(struct cli_filter), 1);
 
                 if (!strncmp("include", argv[0], len) || !strncmp("exclude", argv[0], len) ||
                     !strncmp("grep", argv[0], len) || !strncmp("egrep", argv[0], len))
                     rc = cli_match_filter_init(cli, argc, argv, *filt);
-                else if (!strncmp("begin", argv[0], len) || !strncmp("between", argv[0], len))
+                else if (!strncmp("begin", argv[0], len) || !strncmp("between", argv[0], len) ||
+                         !strncmp("elbegin", argv[0], len) || !strncmp("elbetween", argv[0], len))
                     rc = cli_range_filter_init(cli, argc, argv, *filt);
                 else if (!strncmp("count", argv[0], len))
                     rc = cli_count_filter_init(cli, argc, argv, *filt);
@@ -1160,7 +1230,11 @@ static int pass_matches(const char *pass, const char *try)
     return !strcmp(pass, try);
 }
 
+#ifdef CTRL
+#undef CTRL
+#endif
 #define CTRL(c) (c - '@')
+
 
 static int show_prompt(struct cli_def *cli, int sockfd)
 {
@@ -1175,6 +1249,8 @@ static int show_prompt(struct cli_def *cli, int sockfd)
     return len + write(sockfd, cli->promptchar, strlen(cli->promptchar));
 }
 
+#define MAX_EPOLL_SIZE          100
+
 int cli_loop(struct cli_def *cli, int sockfd)
 {
     unsigned char c;
@@ -1182,6 +1258,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
     int cursor = 0, insertmode = 1;
     char *cmd = NULL, *oldcmd = 0;
     char *username = NULL, *password = NULL;
+    int epfd, res, nfds;
+    static struct epoll_event ev, events[MAX_EPOLL_SIZE];
 
     cli_build_shortest(cli, cli->commands);
     cli->state = STATE_LOGIN;
@@ -1228,6 +1306,19 @@ int cli_loop(struct cli_def *cli, int sockfd)
     if (!cli->users && !cli->auth_callback)
         cli->state = STATE_NORMAL;
 
+    epfd = epoll_create(MAX_EPOLL_SIZE);
+    if (epfd < 0) {
+        perror("epoll_create");
+        return CLI_ERROR;
+    }
+    ev.events = EPOLLIN | EPOLLERR | EPOLLHUP;
+    ev.data.fd = sockfd;
+    res = epoll_ctl(epfd, EPOLL_CTL_ADD, sockfd, &ev);
+    if (res < 0) {
+        perror("epoll_ctl");
+        return CLI_ERROR;
+    }
+
     while (1)
     {
         signed int in_history = 0;
@@ -1255,8 +1346,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
         while (1)
         {
-            int sr;
-            fd_set r;
+            //int sr;
             if (cli->showprompt)
             {
                 if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
@@ -1293,10 +1383,13 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 cli->showprompt = 0;
             }
 
-            FD_ZERO(&r);
-            FD_SET(sockfd, &r);
+            //FD_ZERO(&r);
+            //FD_SET(sockfd, &r);
 
-            if ((sr = select(sockfd + 1, &r, NULL, NULL, &tm)) < 0)
+            //if ((sr = select(sockfd + 1, &r, NULL, NULL, &tm)) < 0)
+
+            nfds = epoll_wait(epfd, events, 1, 1 * 1000); // 1 sec
+            if (nfds < 0)
             {
                 /* select error */
                 if (errno == EINTR)
@@ -1306,8 +1399,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 l = -1;
                 break;
             }
-
-            if (sr == 0)
+            //if (sr == 0)
+            else if (nfds == 0)
             {
                 /* timeout every second */
                 if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK)
@@ -2012,7 +2105,7 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
         struct cli_filter *f = (print_mode & PRINT_FILTERED) ? cli->filters : 0;
         int print = 1;
 
-        if (next)
+	if (next && !(print_mode & PRINT_NONL))
             *next++ = 0;
         else if (print_mode & PRINT_BUFFERED)
             break;
@@ -2026,8 +2119,15 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
         {
             if (cli->print_callback)
                 cli->print_callback(cli, p);
-            else if (cli->client)
-                fprintf(cli->client, "%s\r\n", p);
+            else if (cli->client) {
+		if (print_mode & PRINT_NONL) {
+		    fprintf(cli->client, "%s", p);
+		    p = NULL;
+		    break;
+		} else {
+		    fprintf(cli->client, "%s\r\n", p);
+		}
+	    }
         }
 
         p = next;
@@ -2061,6 +2161,15 @@ void cli_print(struct cli_def *cli, const char *format, ...)
 
     va_start(ap, format);
     _print(cli, PRINT_FILTERED, format, ap);
+    va_end(ap);
+}
+
+void cli_print_nonl(struct cli_def *cli, const char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    _print(cli, PRINT_FILTERED | PRINT_NONL, format, ap);
     va_end(ap);
 }
 
@@ -2207,10 +2316,18 @@ int cli_match_filter(UNUSED(struct cli_def *cli), const char *string, void *data
     return r;
 }
 
+#define CLI_EARLY_PRINT_STRINGS_MAX 124
+
 struct cli_range_filter_state {
     int matched;
     char *from;
     char *to;
+
+    unsigned int   elpstr_req    : 1;
+    unsigned int   elpstr_done   : 1;
+    unsigned int   elpstr_unused : 30;
+    int   elpstr_cidx;
+    char *elpstr_buf[CLI_EARLY_PRINT_STRINGS_MAX];
 };
 
 int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt)
@@ -2218,8 +2335,11 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
     struct cli_range_filter_state *state;
     char *from = 0;
     char *to = 0;
+    int  elpstr_req = 0;
 
-    if (!strncmp(argv[0], "bet", 3)) // between
+    if (!strncmp(argv[0], "bet", 3) || !strncmp(argv[0], "elbet", 5)) // between
+                                                                      // or
+                                                                      // elbetween
     {
         if (argc < 3)
         {
@@ -2232,8 +2352,12 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
         if (!(from = strdup(argv[1])))
             return CLI_ERROR;
         to = join_words(argc-2, argv+2);
+
+        if (!strncmp(argv[0], "elbet", 5)) {
+            elpstr_req = 1;
+        }
     }
-    else // begin
+    else // begin or elbegin
     {
         if (argc < 2)
         {
@@ -2244,13 +2368,89 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
         }
 
         from = join_words(argc-1, argv+1);
+
+        if (!strncmp(argv[0], "elbeg", 5)) {
+            elpstr_req = 1;
+        }
     }
 
     filt->filter = cli_range_filter;
     filt->data = state = calloc(sizeof(struct cli_range_filter_state), 1);
 
+    state->elpstr_req = elpstr_req;
+
     state->from = from;
     state->to = to;
+
+    return CLI_OK;
+}
+
+int cli_range_filter_elpstr_add (struct cli_def *cli,
+                                 const char *string,
+                                 struct cli_range_filter_state *state,
+                                 int print_mode)
+{
+    int index = state->elpstr_cidx % CLI_EARLY_PRINT_STRINGS_MAX;
+    int str_len = 0;
+
+    str_len = strlen(string);
+
+    /* if there is early string already stored, free it */
+    if (state->elpstr_buf[index] != NULL) {
+        free_z(state->elpstr_buf[index]);
+    }
+
+    state->elpstr_buf[index] = (char *) calloc(1, str_len + 8);
+    if (state->elpstr_buf[index] == NULL) {
+        fprintf(cli->client, "%s",
+               "Error occurred in range filter early strings storage!\n");
+        return CLI_OK;
+    }
+
+    strcat(state->elpstr_buf[index], string);
+
+    if (!(print_mode & PRINT_NONL)) {
+        strcat(state->elpstr_buf[index], "\r\n");
+    }
+
+    state->elpstr_cidx = state->elpstr_cidx + 1;
+
+    return CLI_OK;
+}
+
+int cli_range_filter_elsptr_destroy (struct cli_def *cli,
+                                    struct cli_range_filter_state *state)
+{
+    int i = 0;
+
+    state->elpstr_req = 0;
+
+    for (i = 0; i < CLI_EARLY_PRINT_STRINGS_MAX; i++) {
+        if (state->elpstr_buf[i] != NULL) {
+            free_z(state->elpstr_buf[i]);
+        }
+    }
+
+    return CLI_OK;
+}
+
+int cli_range_filter_elsptr_print (struct cli_def *cli,
+                                  struct cli_range_filter_state *state)
+{
+    int index = state->elpstr_cidx % CLI_EARLY_PRINT_STRINGS_MAX;
+    int start = 0, n_elpstrs = index, i = 0, cnt = 0;
+
+    if (state->elpstr_buf[index] != NULL) {
+        start = index;
+        n_elpstrs = CLI_EARLY_PRINT_STRINGS_MAX;
+    }
+
+    i = start;
+    while (cnt < n_elpstrs-1) {
+        fprintf(cli->client, "%s", state->elpstr_buf[i]);
+        i = ((i + 1) % CLI_EARLY_PRINT_STRINGS_MAX);
+        cnt = cnt + 1;
+    }
 
     return CLI_OK;
 }
@@ -2264,12 +2464,28 @@ int cli_range_filter(UNUSED(struct cli_def *cli), const char *string, void *data
     {
         free_z(state->from);
         free_z(state->to);
+        cli_range_filter_elsptr_destroy(cli, state);
         free_z(state);
         return CLI_OK;
     }
 
+    if (state->elpstr_req && !state->elpstr_done) {
+        /* Add it to list */
+        cli_range_filter_elpstr_add(cli, string, data, 0);
+    }
+
     if (!state->matched)
-    state->matched = !!strstr(string, state->from);
+        state->matched = !!strstr(string, state->from);
+
+    if (state->matched && state->elpstr_req && !state->elpstr_done) {
+        /* Print here */
+        cli_range_filter_elsptr_print(cli, state);
+
+        /* Mark early strings are printed. */
+        state->elpstr_done = 1;
+
+        /* elpstr will be cleaned when state is getting cleaned. */
+    }
 
     if (state->matched)
     {
@@ -2350,4 +2566,882 @@ void cli_set_context(struct cli_def *cli, void *context) {
 
 void *cli_get_context(struct cli_def *cli) {
     return cli->user_context;
+}
+
+cc_rbuf_t cc_rbuf_default = {
+    .nx               = 0,
+    .lx               = 0,
+    .oldlx            = 0,
+    .is_telnet_option = 0,
+    .skip             = 0,
+    .esc              = 0,
+    .cursor           = 0,
+    .insertmode       = 1,
+    .cmd              = NULL,
+    .oldcmd           = 0,
+    .username         = NULL,
+    .password         = NULL,
+};
+
+int
+cc_conn_cli_end (cc_client_t *client_ctx)
+{
+    struct cli_def *cli = client_ctx->cc_cli_ctx;
+    cc_rbuf_t      *cli_ev = &client_ctx->cc_ri;
+
+    cli_free_history(cli);
+    free_z(cli_ev->username);
+    free_z(cli_ev->password);
+    free_z(cli_ev->cmd);
+
+    fclose(cli->client);
+    cli->client = 0;
+    memset(cli_ev, 0, sizeof(cc_rbuf_t));
+
+    return 0;
+}
+
+int
+cc_conn_input_read (cc_client_t *client_ctx,
+                    int          sockfd)
+{
+    struct cli_def *cli = client_ctx->cc_cli_ctx;
+    cc_rbuf_t      *cli_ev = &client_ctx->cc_ri;
+
+    unsigned char c;
+    int buf_len = 0;
+    int read_so_far = 0, nbytes = 0;
+
+    if (ioctl(sockfd, FIONREAD, &buf_len) < 0) {
+        cc_conn_cli_end(client_ctx);
+        return CLI_EV_QUIT;
+    }
+
+    if (buf_len == 0) {
+        cc_conn_cli_end(client_ctx);
+        return CLI_EV_QUIT;
+    }
+
+    while (1) {
+        if (read_so_far >= buf_len) {
+            return CLI_EV_WAIT;
+        }
+
+        nbytes = read(sockfd, &c, 1);
+        if (nbytes <= 0) {
+            cc_conn_cli_end(client_ctx);
+            return CLI_EV_QUIT;
+        }
+
+        read_so_far++;
+
+        if (c == 255 && !cli_ev->is_telnet_option)
+        {
+            cli_ev->is_telnet_option++;
+            continue;
+        }
+
+        if (cli_ev->is_telnet_option)
+        {
+            if (c >= 251 && c <= 254)
+            {
+                cli_ev->is_telnet_option = c;
+                continue;
+            }
+
+            if (c != 255)
+            {
+                cli_ev->is_telnet_option = 0;
+                continue;
+            }
+
+            cli_ev->is_telnet_option = 0;
+        }
+
+        /* handle ANSI arrows */
+        if (cli_ev->esc)
+        {
+            if (cli_ev->esc == '[' || cli_ev->esc == 'O')
+            {
+                /* remap to readline control codes */
+                switch (c)
+                {
+                case 'A': /* Up */
+                    c = CTRL('P');
+                    break;
+
+                case 'B': /* Down */
+                    c = CTRL('N');
+                    break;
+
+                case 'C': /* Right */
+                    c = CTRL('F');
+                    break;
+
+                case 'D': /* Left */
+                    c = CTRL('B');
+                    break;
+
+                default:
+                    c = 0;
+                }
+
+                cli_ev->esc = 0;
+            }
+            else
+            {
+                cli_ev->esc = (c == '[' || c == 'O') ? c : 0;
+                continue;
+            }
+        }
+
+        if (c == 0) continue;
+        if (c == '\n') continue;
+
+        if (c == '\r')
+        {
+            if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                _write(sockfd, "\r\n", 2);
+            return CLI_EV_TRY_ACTION;
+        }
+
+        if (c == 27)
+        {
+            cli_ev->esc = 1;
+            continue;
+        }
+
+        if (c == CTRL('C'))
+        {
+            _write(sockfd, "\a", 1);
+            continue;
+        }
+
+        /* back word, backspace/delete */
+        if (c == CTRL('W') || c == CTRL('H') || c == 0x7f)
+        {
+            int back = 0;
+
+            if (c == CTRL('W')) /* word */
+            {
+                int nc = cli_ev->cursor;
+
+                if (cli_ev->lx == 0 || cli_ev->cursor == 0)
+                    continue;
+
+                while (nc && cli_ev->cmd[nc - 1] == ' ')
+                {
+                    nc--;
+                    back++;
+                }
+
+                while (nc && cli_ev->cmd[nc - 1] != ' ')
+                {
+                    nc--;
+                    back++;
+                }
+            }
+            else /* char */
+            {
+                if (cli_ev->lx == 0 || cli_ev->cursor == 0)
+                {
+                    _write(sockfd, "\a", 1);
+                    continue;
+                }
+
+                back = 1;
+            }
+
+            if (back)
+            {
+                while (back--)
+                {
+                    if (cli_ev->lx == cli_ev->cursor)
+                    {
+                        cli_ev->cmd[--cli_ev->cursor] = 0;
+                        if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                            _write(sockfd, "\b \b", 3);
+                    }
+                    else
+                    {
+                        int i;
+                        cli_ev->cursor--;
+                        if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                        {
+                            for (i = cli_ev->cursor; i <= cli_ev->lx; i++) cli_ev->cmd[i] = cli_ev->cmd[i+1];
+                            _write(sockfd, "\b", 1);
+                            _write(sockfd, cli_ev->cmd + cli_ev->cursor, strlen(cli_ev->cmd + cli_ev->cursor));
+                            _write(sockfd, " ", 1);
+                            for (i = 0; i <= (int)strlen(cli_ev->cmd + cli_ev->cursor); i++)
+                                _write(sockfd, "\b", 1);
+                        }
+                    }
+                    cli_ev->lx--;
+                }
+
+                continue;
+            }
+        }
+
+        /* redraw */
+        if (c == CTRL('L'))
+        {
+            int i;
+            int cursorback = cli_ev->lx - cli_ev->cursor;
+
+            if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                continue;
+
+            _write(sockfd, "\r\n", 2);
+            show_prompt(cli, sockfd);
+            _write(sockfd, cli_ev->cmd, cli_ev->lx);
+
+            for (i = 0; i < cursorback; i++)
+                _write(sockfd, "\b", 1);
+
+            continue;
+        }
+
+        /* clear line */
+        if (c == CTRL('U'))
+        {
+            if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                memset(cli_ev->cmd, 0, cli_ev->lx);
+            else
+                cli_clear_line(sockfd, cli_ev->cmd, cli_ev->lx, cli_ev->cursor);
+
+            cli_ev->lx = cli_ev->cursor = 0;
+            continue;
+        }
+
+        /* kill to EOL */
+        if (c == CTRL('K'))
+        {
+            if (cli_ev->cursor == cli_ev->lx)
+                continue;
+
+            if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+            {
+                int c;
+                for (c = cli_ev->cursor; c < cli_ev->lx; c++)
+                    _write(sockfd, " ", 1);
+
+                for (c = cli_ev->cursor; c < cli_ev->lx; c++)
+                    _write(sockfd, "\b", 1);
+            }
+
+            memset(cli_ev->cmd + cli_ev->cursor, 0, cli_ev->lx - cli_ev->cursor);
+            cli_ev->lx = cli_ev->cursor;
+            continue;
+        }
+
+        /* EOT */
+        if (c == CTRL('D'))
+        {
+            if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD) {
+                cc_conn_cli_end(client_ctx);
+                return CLI_EV_QUIT;
+            }
+
+            if (cli_ev->lx) {
+                return CLI_EV_WAIT;
+            }
+
+            cli_ev->lx = -1;
+            cc_conn_cli_end(client_ctx);
+            return CLI_EV_QUIT;
+        }
+
+        /* disable */
+        if (c == CTRL('Z'))
+        {
+            if (cli->mode != MODE_EXEC)
+            {
+                cli_clear_line(sockfd, cli_ev->cmd, cli_ev->lx, cli_ev->cursor);
+                cli_set_configmode(cli, MODE_EXEC, NULL);
+                cli->showprompt = 1;
+            }
+
+            continue;
+        }
+
+        /* TAB completion */
+        if (c == CTRL('I'))
+        {
+            char *completions[CLI_MAX_LINE_WORDS];
+            int num_completions = 0;
+
+            if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                continue;
+
+            if (cli_ev->cursor != cli_ev->lx) continue;
+
+            num_completions = cli_get_completions(cli, cli_ev->cmd, completions, CLI_MAX_LINE_WORDS);
+            if (num_completions == 0)
+            {
+                _write(sockfd, "\a", 1);
+            }
+            else if (num_completions == 1)
+            {
+                // Single completion
+                for (; cli_ev->lx > 0; cli_ev->lx--, cli_ev->cursor--)
+                {
+                    if (cli_ev->cmd[cli_ev->lx-1] == ' ' || cli_ev->cmd[cli_ev->lx-1] == '|')
+                        break;
+                    _write(sockfd, "\b", 1);
+                }
+                strcpy((cli_ev->cmd + cli_ev->lx), completions[0]);
+                cli_ev->lx += strlen(completions[0]);
+                cli_ev->cmd[cli_ev->lx++] = ' ';
+                cli_ev->cursor = cli_ev->lx;
+                _write(sockfd, completions[0], strlen(completions[0]));
+                _write(sockfd, " ", 1);
+            }
+            else if (cli_ev->lastchar == CTRL('I'))
+            {
+                // double tab
+                int i;
+                _write(sockfd, "\r\n", 2);
+                for (i = 0; i < num_completions; i++)
+                {
+                    _write(sockfd, completions[i], strlen(completions[i]));
+                    if (i % 4 == 3)
+                        _write(sockfd, "\r\n", 2);
+                    else
+                        _write(sockfd, "     ", 1);
+                }
+                if (i %4 != 3) _write(sockfd, "\r\n", 2);
+                cli->showprompt = 1;
+            }
+            else
+            {
+                // More than one completion
+                cli_ev->lastchar = c;
+                _write(sockfd, "\a", 1);
+            }
+            continue;
+        }
+
+        /* history */
+        if (c == CTRL('P') || c == CTRL('N'))
+        {
+            int history_found = 0;
+
+            if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                continue;
+
+            if (c == CTRL('P')) // Up
+            {
+                cli_ev->in_history--;
+                if (cli_ev->in_history < 0)
+                {
+                    for (cli_ev->in_history = MAX_HISTORY-1; cli_ev->in_history >= 0; cli_ev->in_history--)
+                    {
+                        if (cli->history[cli_ev->in_history])
+                        {
+                            history_found = 1;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    if (cli->history[cli_ev->in_history]) history_found = 1;
+                }
+            }
+            else // Down
+            {
+                cli_ev->in_history++;
+                if (cli_ev->in_history >= MAX_HISTORY || !cli->history[cli_ev->in_history])
+                {
+                    int i = 0;
+                    for (i = 0; i < MAX_HISTORY; i++)
+                    {
+                        if (cli->history[i])
+                        {
+                            cli_ev->in_history = i;
+                            history_found = 1;
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    if (cli->history[cli_ev->in_history]) history_found = 1;
+                }
+            }
+            if (history_found && cli->history[cli_ev->in_history])
+            {
+                // Show history item
+                cli_clear_line(sockfd, cli_ev->cmd, cli_ev->lx, cli_ev->cursor);
+                memset(cli_ev->cmd, 0, CLI_MAX_LINE_LENGTH);
+                strncpy(cli_ev->cmd, cli->history[cli_ev->in_history], CLI_MAX_LINE_LENGTH - 1);
+                cli_ev->lx = cli_ev->cursor = strlen(cli_ev->cmd);
+                _write(sockfd, cli_ev->cmd, cli_ev->lx);
+            }
+
+            continue;
+        }
+
+        /* left/right cli_ev->cursor motion */
+        if (c == CTRL('B') || c == CTRL('F'))
+        {
+            if (c == CTRL('B')) /* Left */
+            {
+                if (cli_ev->cursor)
+                {
+                    if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                        _write(sockfd, "\b", 1);
+
+                    cli_ev->cursor--;
+                }
+            }
+            else /* Right */
+            {
+                if (cli_ev->cursor < cli_ev->lx)
+                {
+                    if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                        _write(sockfd, &cli_ev->cmd[cli_ev->cursor], 1);
+
+                    cli_ev->cursor++;
+                }
+            }
+
+            continue;
+        }
+
+        /* start of line */
+        if (c == CTRL('A'))
+        {
+            if (cli_ev->cursor)
+            {
+                if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                {
+                    _write(sockfd, "\r", 1);
+                    show_prompt(cli, sockfd);
+                }
+
+                cli_ev->cursor = 0;
+            }
+
+            continue;
+        }
+
+        /* end of line */
+        if (c == CTRL('E'))
+        {
+            if (cli_ev->cursor < cli_ev->lx)
+            {
+                if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+                    _write(sockfd, &cli_ev->cmd[cli_ev->cursor], cli_ev->lx - cli_ev->cursor);
+
+                cli_ev->cursor = cli_ev->lx;
+            }
+
+            continue;
+        }
+
+        /* normal character typed */
+        if (cli_ev->cursor == cli_ev->lx)
+        {
+            /* append to end of line */
+            cli_ev->cmd[cli_ev->cursor] = c;
+            if (cli_ev->lx < CLI_MAX_LINE_LENGTH - 1)
+            {
+                cli_ev->lx++;
+                cli_ev->cursor++;
+            }
+            else
+            {
+                _write(sockfd, "\a", 1);
+                continue;
+            }
+        }
+        else
+        {
+            // Middle of text
+            if (cli_ev->insertmode)
+            {
+                int i;
+                // Move everything one character to the right
+                if (cli_ev->lx >= CLI_MAX_LINE_LENGTH - 2) cli_ev->lx--;
+                for (i = cli_ev->lx; i >= cli_ev->cursor; i--)
+                    cli_ev->cmd[i + 1] = cli_ev->cmd[i];
+                // Write what we've just added
+                cli_ev->cmd[cli_ev->cursor] = c;
+
+                _write(sockfd, &cli_ev->cmd[cli_ev->cursor], cli_ev->lx - cli_ev->cursor + 1);
+                for (i = 0; i < (cli_ev->lx - cli_ev->cursor + 1); i++)
+                    _write(sockfd, "\b", 1);
+                cli_ev->lx++;
+            }
+            else
+            {
+                cli_ev->cmd[cli_ev->cursor] = c;
+            }
+            cli_ev->cursor++;
+        }
+
+        if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+        {
+            if (c == '?' && cli_ev->cursor == cli_ev->lx)
+            {
+                _write(sockfd, "\r\n", 2);
+                cli_ev->oldcmd = cli_ev->cmd;
+                cli_ev->oldlx = cli_ev->cursor = cli_ev->lx - 1;
+                return CLI_EV_TRY_ACTION;
+            }
+            _write(sockfd, &c, 1);
+        }
+
+        cli_ev->oldcmd = 0;
+        cli_ev->oldlx = 0;
+        cli_ev->lastchar = c;
+    }
+
+    return CLI_EV_WAIT;
+}
+
+int
+cc_conn_cli_start (cc_client_t *client_ctx,
+                   int          sockfd)
+{
+    struct cli_def *cli = client_ctx->cc_cli_ctx;
+    cc_rbuf_t      *cli_ev = &client_ctx->cc_ri;
+
+    cli_ev->in_history = 0;
+    cli_ev->lastchar = 0;
+
+    cli->showprompt = 1;
+
+    if (cli_ev->oldcmd)
+    {
+        cli_ev->lx = cli_ev->cursor = cli_ev->oldlx;
+        cli_ev->oldcmd[cli_ev->lx] = 0;
+        cli->showprompt = 1;
+        cli_ev->oldcmd = NULL;
+        cli_ev->oldlx = 0;
+    }
+    else
+    {
+        memset(cli_ev->cmd, 0, CLI_MAX_LINE_LENGTH);
+        cli_ev->lx = 0;
+        cli_ev->cursor = 0;
+    }
+
+    memcpy(&cli_ev->tm, &cli->timeout_tm, sizeof(cli_ev->tm));
+
+    if (cli->showprompt)
+    {
+        if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
+            _write(sockfd, "\r\n", 2);
+
+        switch (cli->state)
+        {
+        case STATE_LOGIN:
+            _write(sockfd, "Username: ", strlen("Username: "));
+            break;
+
+        case STATE_PASSWORD:
+            _write(sockfd, "Password: ", strlen("Password: "));
+            break;
+
+        case STATE_NORMAL:
+        case STATE_ENABLE:
+            show_prompt(cli, sockfd);
+            _write(sockfd, cli_ev->cmd, cli_ev->lx);
+            if (cli_ev->cursor < cli_ev->lx)
+            {
+                int n = cli_ev->lx - cli_ev->cursor;
+                while (n--)
+                    _write(sockfd, "\b", 1);
+            }
+            break;
+
+        case STATE_ENABLE_PASSWORD:
+            _write(sockfd, "Password: ", strlen("Password: "));
+            break;
+
+        }
+
+        cli->showprompt = 0;
+    }
+
+    return CLI_EV_WAIT;
+}
+
+int
+cc_conn_cli_action(cc_client_t  *client_ctx,
+                   int           sockfd)
+{
+    struct cli_def *cli = client_ctx->cc_cli_ctx;
+    cc_rbuf_t      *cli_ev = &client_ctx->cc_ri;
+
+    if (cli->state == STATE_LOGIN)
+    {
+        if (cli_ev->lx == 0) {
+            cc_conn_cli_start(client_ctx, sockfd);
+            return CLI_EV_WAIT;
+        }
+
+        /* require login */
+        free_z(cli_ev->username);
+        if (!(cli_ev->username = strdup(cli_ev->cmd))) {
+            cc_conn_cli_end(client_ctx);
+            return CLI_EV_QUIT;
+        }
+        
+        cli->state = STATE_PASSWORD;
+        cli->showprompt = 1;
+    }
+    else if (cli->state == STATE_PASSWORD)
+    {
+        /* require cli_ev->password */
+        int allowed = 0;
+
+        free_z(cli_ev->password);
+        if (!(cli_ev->password = strdup(cli_ev->cmd))) {
+            cc_conn_cli_end(client_ctx);
+            return CLI_EV_QUIT;
+        }
+        if (cli->auth_callback)
+        {
+            if (cli->auth_callback(cli_ev->username, cli_ev->password) == CLI_OK)
+                allowed++;
+        }
+
+        if (!allowed)
+        {
+            struct unp *u;
+            for (u = cli->users; u; u = u->next)
+            {
+                if (!strcmp(u->username, cli_ev->username) && pass_matches(u->password, cli_ev->password))
+                {
+                    allowed++;
+                    break;
+                }
+            }
+        }
+
+        if (allowed)
+        {
+            cli_error(cli, " ");
+            cli->state = STATE_NORMAL;
+        }
+        else
+        {
+            cli_error(cli, "\n\nAccess denied");
+            free_z(cli_ev->username);
+            free_z(cli_ev->password);
+            cli->state = STATE_LOGIN;
+        }
+
+        cli->showprompt = 1;
+    }
+    else if (cli->state == STATE_ENABLE_PASSWORD)
+    {
+        int allowed = 0;
+        if (cli->enable_password)
+        {
+            /* check stored static enable cli_ev->password */
+            if (pass_matches(cli->enable_password, cli_ev->cmd))
+                allowed++;
+        }
+
+        if (!allowed && cli->enable_callback)
+        {
+            /* check callback */
+            if (cli->enable_callback(cli_ev->cmd))
+                allowed++;
+        }
+
+        if (allowed)
+        {
+            cli->state = STATE_ENABLE;
+            cli_set_privilege(cli, PRIVILEGE_PRIVILEGED);
+        }
+        else
+        {
+            cli_error(cli, "\n\nAccess denied");
+            cli->state = STATE_NORMAL;
+        }
+    }
+    else
+    {
+        if (cli_ev->lx == 0) {
+            cc_conn_cli_start(client_ctx, sockfd);
+            return CLI_EV_WAIT;
+        }
+
+        if (cli_ev->cmd[cli_ev->lx - 1] != '?' && strcasecmp(cli_ev->cmd, "history") != 0)
+            cli_add_history(cli, cli_ev->cmd);
+
+        if (cli_run_command(cli, cli_ev->cmd) == CLI_QUIT) {
+            cc_conn_cli_end(client_ctx);
+            return CLI_EV_QUIT;
+        }
+    }
+
+    // Update the last_action time now as the last command run could take a
+    // long time to return
+    if (cli->idle_timeout)
+        time(&cli->last_action);
+
+    cc_conn_cli_start(client_ctx, sockfd);
+    return CLI_EV_WAIT;
+}
+
+int
+cc_conn_cli_setup(cc_client_t *client_ctx,
+                  int          sockfd)
+{
+    struct cli_def *cli = client_ctx->cc_cli_ctx;
+    cc_rbuf_t      *cli_ev = &client_ctx->cc_ri;
+
+    static const char *negotiate =
+        "\xFF\xFB\x03"
+        "\xFF\xFB\x01"
+        "\xFF\xFD\x03"
+        "\xFF\xFD\x01";
+
+    cli_build_shortest(cli, cli->commands);
+    cli->state = STATE_LOGIN;
+
+    cli_free_history(cli);
+    if (cli->telnet_protocol) {
+        _write(sockfd, negotiate, strlen(negotiate));
+    }
+
+    if ((cli_ev->cmd = malloc(CLI_MAX_LINE_LENGTH)) == NULL)
+        return CLI_ERROR;
+
+    if (!(cli->client = fdopen(sockfd, "w+")))
+        return CLI_ERROR;
+
+    setbuf(cli->client, NULL);
+    if (cli->banner)
+        cli_error(cli, "%s", cli->banner);
+
+    // Set the last action now so we don't time immediately
+    if (cli->idle_timeout)
+        time(&cli->last_action);
+
+    /* start off in unprivileged mode */
+    cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
+    cli_set_configmode(cli, MODE_EXEC, NULL);
+
+    /* no auth required? */
+    if (!cli->users && !cli->auth_callback)
+        cli->state = STATE_NORMAL;
+
+    /* Begin the command line interface from start. */
+    cc_conn_cli_start(client_ctx, sockfd);
+
+    return CLI_OK;
+}
+
+
+static inline cc_client_t *
+cc_client_alloc (void)
+{
+    cc_client_t *cc_client;
+
+    cc_client = (cc_client_t *) malloc(sizeof(cc_client_t));
+    if (NULL == cc_client) {
+        return NULL;
+    }
+
+    memset(cc_client, 0, sizeof(cc_client_t));
+
+    return cc_client;
+}
+
+static inline void
+cc_client_free (cc_client_t *cc_client)
+{
+    free(cc_client);
+}
+
+static inline cc_client_t *
+cc_client_construct (cc_server_ctx_t *svr_ctx,
+                     u_int32_t client_id)
+{
+    cc_client_t *cc_client;
+
+    cc_client = cc_client_alloc();
+    if (NULL == cc_client) {
+        return NULL;
+    }
+
+    cc_client->cc_client_id   = client_id;
+    svr_ctx->sc_client_list[client_id] = cc_client;
+
+    return cc_client;
+}
+
+static inline void
+cc_client_destruct (cc_client_t **cc_client)
+{
+    cc_client_t *client = *cc_client;
+    cc_server_ctx_t *svr_ctx = client->cc_svr_ctx;
+
+    /* Take out the reference. */
+    *cc_client = NULL;
+
+    svr_ctx->sc_client_list[client->cc_client_id] = NULL;
+
+    cc_client_free(client);
+}
+
+int
+cc_client_add (cc_server_ctx_t *svr_ctx,
+               cc_client_t **client)
+{
+    u_int32_t  idx = 0, client_id = 0;
+    cc_client_t *cc_client;
+
+    for (idx = 1; idx <= CC_CLIENTS_MAX; idx++) {
+        if (svr_ctx->sc_client_list[idx] == NULL) {
+            client_id = idx;
+            break;
+        }
+    }
+
+    if (client_id == 0) {
+        return -1;
+    }
+
+    cc_client = cc_client_construct(svr_ctx, client_id);
+    if (NULL == cc_client) {
+        return -1;
+    }
+
+    if (client) {
+        *client = cc_client;
+    }
+
+    return 0;
+}
+
+void
+cc_client_remove (cc_client_t **cc_client)
+{
+    cc_client_destruct(cc_client);
+}
+
+unsigned char
+cli_help_required (struct cli_def *cli,
+                   const char     *command,
+                   char           *argv[],
+                   int             argc)
+{
+    int i = 0;
+
+    for (i = 0; i < argc; i++) {
+        if (argv[i][0] == '?') {
+            return 1;
+        }
+    }
+
+    return 0;
 }

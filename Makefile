@@ -26,9 +26,10 @@ override LIBPATH += -L.
 
 ifeq ($(UNAME),Darwin)
 override LDFLAGS += -Wl,-install_name,$(LIB).$(MAJOR).$(MINOR)
+LIBS = -levent
 else
 override LDFLAGS += -Wl,-soname,$(LIB).$(MAJOR).$(MINOR)
-LIBS = -lcrypt
+LIBS = -lcrypt -levent
 endif
 
 ifeq (1,$(DYNAMIC_LIB))
@@ -40,7 +41,7 @@ endif
 
 all: $(TARGET_LIBS) $(if $(filter 1,$(TESTS)),clitest)
 
-$(LIB): libcli.o
+$(LIB): libcli.o evcli.o libcli_ex.o
 	$(CC) -o $(LIB).$(MAJOR).$(MINOR).$(REVISION) $^ $(LDFLAGS) $(LIBS)
 	-rm -f $(LIB) $(LIB).$(MAJOR).$(MINOR)
 	ln -s $(LIB).$(MAJOR).$(MINOR).$(REVISION) $(LIB).$(MAJOR).$(MINOR)

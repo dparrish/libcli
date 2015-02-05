@@ -29,6 +29,7 @@ extern "C" {
 #define PRINT_PLAIN             0
 #define PRINT_FILTERED          0x01
 #define PRINT_BUFFERED          0x02
+#define PRINT_NONL              0x04
 
 #define CLI_MAX_LINE_LENGTH     4096
 #define CLI_MAX_LINE_WORDS      128
@@ -85,7 +86,7 @@ struct cli_command {
     struct cli_command *parent;
 };
 
-struct cli_def *cli_init();
+struct cli_def *cli_init(void);
 int cli_done(struct cli_def *cli);
 struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command,
                                          int (*callback)(struct cli_def *, const char *, char **, int), int privilege,
@@ -109,6 +110,7 @@ void cli_reprompt(struct cli_def *cli);
 void cli_regular(struct cli_def *cli, int (*callback)(struct cli_def *cli));
 void cli_regular_interval(struct cli_def *cli, int seconds);
 void cli_print(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
+void cli_print_nonl(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_bufprint(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_vabufprint(struct cli_def *cli, const char *format, va_list ap);
 void cli_error(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
@@ -129,4 +131,81 @@ void *cli_get_context(struct cli_def *cli);
 }
 #endif
 
+#define CLI_EV_WAIT 1
+#define CLI_EV_QUIT 2
+#define CLI_EV_TRY_ACTION 3
+
+typedef struct cc_rbuf_s {
+    int             nx;
+    int             lx;
+    int             oldlx;
+    int             is_telnet_option;
+    int             skip;
+    int             esc;
+    int             cursor;
+    int             insertmode;
+    char           *cmd;
+    char           *oldcmd;
+    char           *username;
+    char           *password;
+    signed int      in_history;
+    int             lastchar;
+    struct timeval  tm;
+} cc_rbuf_t;
+
+extern cc_rbuf_t cc_rbuf_default;
+
+struct cc_server_ctx_s;
+
+typedef struct cc_ev_client_s {
+    struct event    *cc_ev;
+    int              cc_ev_fd;
+} cc_ev_client_t;
+
+#define CC_EVENT_MODE_SELECT    0
+#define CC_EVENT_MODE_EVPOLL    1
+typedef struct cc_ev_server_s {
+    int                    cc_ev_mode;
+    struct event_base     *cc_ev_base;
+    struct evconnlistener *cc_ev_listener;
+    int                    cc_ev_epollfd;
+} cc_ev_server_t;
+
+#define CC_CLIENTS_MAX 5
+typedef struct cc_client_s {
+    unsigned int            cc_client_id;
+    struct cli_def         *cc_cli_ctx;
+    cc_rbuf_t               cc_ri;      /* read information */
+
+    cc_ev_client_t          cc_ev_clnt;
+    struct cc_server_ctx_s *cc_svr_ctx;
+} cc_client_t;
+
+typedef struct cli_def * (*cc_cli_ctx_alloc_cb)(void);
+
+typedef struct cc_server_ctx_s {
+    cc_ev_server_t         sc_ev_srvr;
+    cc_cli_ctx_alloc_cb    sc_cli_ctx_alloc_cb;
+    cc_client_t           *sc_client_list[CC_CLIENTS_MAX+1];
+} cc_server_ctx_t;
+
+int
+cc_conn_cli_setup(cc_client_t *client_ctx,
+                  int          sockfd);
+int cc_conn_input_read (cc_client_t *client_ctx,
+                        int          sockfd);
+int cc_conn_cli_action(cc_client_t *client_ctx,
+                       int          sockfd);
+
+int
+cc_client_add (cc_server_ctx_t *svr_ctx,
+               cc_client_t **client);
+void
+cc_client_remove (cc_client_t **cc_client);
+
+unsigned char
+cli_help_required (struct cli_def *cli,
+                   const char     *command,
+                   char           *argv[],
+                   int             argc);
 #endif
