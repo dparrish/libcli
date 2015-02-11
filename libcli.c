@@ -104,7 +104,8 @@ enum cli_states {
     STATE_PASSWORD,
     STATE_NORMAL,
     STATE_ENABLE_PASSWORD,
-    STATE_ENABLE
+    STATE_ENABLE,
+    STATE_REQUEST
 };
 
 enum cli_hooks {
@@ -1351,6 +1352,9 @@ int cli_loop(struct cli_def *cli, int sockfd)
                         _write(sockfd, "Password: ", strlen("Password: "));
                         break;
 
+                    case STATE_REQUEST:
+                        _write(sockfd, cli->request_prompt, strlen(cli->request_prompt));
+                        break;
                 }
 
                 cli->showprompt = 0;
@@ -1662,7 +1666,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 int num_completions = 0;
                 int num_user_completions = 0;
 
-                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD || cli->state == STATE_REQUEST)
                     continue;
 
                 if (cursor != l) continue;
@@ -1985,6 +1989,20 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 cli_error(cli, "\n\nAccess denied");
                 cli->state = STATE_NORMAL;
             }
+        }
+        else if (cli->state == STATE_REQUEST)
+        {
+            // Restore previous state
+            cli->state = cli->request_prior_state;
+
+            // Re-init userprompt fields
+            cli->request_prior_state = 0;
+            free(cli->request_prompt);
+            cli->request_prompt = NULL;
+
+            // Run user prompt callback
+            if (cli->request_callback(cli, cmd) == CLI_QUIT)
+                break;
         }
         else
         {
@@ -2457,5 +2475,35 @@ void cli_register_completion_cb(struct cli_command *cmd,
 void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **, int))
 {
     cli->user_completion_free = callback;
+}
+
+int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), const char *format, ...)
+{
+    if (cli->state == STATE_REQUEST)
+    {
+        // Can't stack requests
+        return CLI_ERROR;
+    }
+
+    if (cli && callback)
+    {
+        // Set up CLI to accept the answer
+        cli->request_callback = callback;
+        cli->request_prior_state = cli->state;
+        cli->state = STATE_REQUEST;
+    }
+    else
+    {
+        return CLI_ERROR;
+    }
+
+    cli->request_prompt = (char *)malloc(80);
+
+    va_list ap;
+    va_start(ap, format);
+    vsnprintf(cli->request_prompt, 80, format, ap);
+    va_end(ap);
+
+    return CLI_OK;
 }
 

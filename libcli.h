@@ -70,6 +70,9 @@ struct cli_def {
     int telnet_protocol;
     void *hooks;
     void (*user_completion_free)(char **, int);
+    char *request_prompt;
+    int request_prior_state;
+    int (*request_callback)(struct cli_def *, const char *);
     void *user_context;
 };
 
@@ -136,6 +139,9 @@ void cli_telnet_protocol(struct cli_def *cli, int telnet_protocol);
 // Set/get user context
 void cli_set_context(struct cli_def *cli, void *context);
 void *cli_get_context(struct cli_def *cli);
+
+// Prompt user for information
+int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), const char *format, ...);
 
 #ifdef __cplusplus
 }

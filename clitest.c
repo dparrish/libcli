@@ -279,6 +279,18 @@ static int hook_disable(struct cli_def *cli, const char *command, char *argv[], 
     return CLI_HOOK_CONTINUE;
 }
 
+static int request_cb(struct cli_def *cli, const char *response)
+{
+    cli_print(cli, "You entered: %s", response);
+    return CLI_OK;
+}
+
+static int cmd_request(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))    
+{
+    cli_request(cli, request_cb, "Enter a value: ");
+    return CLI_OK;
+}
+
 int main()
 {
     struct cli_command *c;
@@ -348,6 +360,8 @@ int main()
     cli_set_context(cli, (void*)&myctx);
     cli_register_command(cli, NULL, "context", cmd_context, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                          "Test a user-specified context");
+
+    cli_register_command(cli, NULL, "request", cmd_request, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Test user request functionality");
 
     cli_set_auth_callback(cli, check_auth);
     cli_set_enable_callback(cli, check_enable);
