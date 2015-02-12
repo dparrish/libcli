@@ -2497,11 +2497,11 @@ int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const cha
         return CLI_ERROR;
     }
 
-    cli->request_prompt = (char *)malloc(80);
+    cli->request_prompt = (char *)malloc(1024);
 
     va_list ap;
     va_start(ap, format);
-    vsnprintf(cli->request_prompt, 80, format, ap);
+    vsnprintf(cli->request_prompt, 1024, format, ap);
     va_end(ap);
 
     return CLI_OK;
