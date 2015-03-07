@@ -73,6 +73,7 @@ struct cli_def {
     char *request_prompt;
     int request_prior_state;
     int (*request_callback)(struct cli_def *, const char *);
+    int (*config_mode_callback)(struct cli_def *);
     void *user_context;
 };
 
@@ -131,6 +132,7 @@ int cli_register_hook(struct cli_def *cli, const char *command,
 void cli_register_completion_cb(struct cli_command *cmd,
                                 int (*callback)(struct cli_def *, const char *, char **, int, char **, int));
 void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **, int));
+void cli_register_configmode_cb(struct cli_def *cli, int (*callback)(struct cli_def *));
 
 // Enable or disable telnet protocol negotiation.
 // Note that this is enabled by default and must be changed before cli_loop() is run.

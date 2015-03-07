@@ -586,6 +586,7 @@ int cli_int_idle_timeout(struct cli_def *cli)
 
 int cli_int_configure_terminal(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
 {
+    if (cli->config_mode_callback) return cli->config_mode_callback(cli);
     cli_set_configmode(cli, MODE_CONFIG, NULL);
     return CLI_OK;
 }
@@ -2507,3 +2508,7 @@ int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const cha
     return CLI_OK;
 }
 
+void cli_register_configmode_cb(struct cli_def *cli, int (*callback)(struct cli_def *))
+{
+    cli->config_mode_callback = callback;
+}
