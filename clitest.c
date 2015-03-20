@@ -285,9 +285,37 @@ static int request_cb(struct cli_def *cli, const char *response)
     return CLI_OK;
 }
 
+static int request_completion_cb(struct cli_def *cli, const char *command, char **completions, int max_completions)
+{
+    // Legal completions list, terminated with empty string
+    const char comps[][20] = { "fred", "nerk", "hello", "friend", "" };
+
+    int retrieve_all = (command[0] == '\0');       // Tab on empty string; return all completions
+
+    int i = 0, c = 0;
+    while (c < max_completions && comps[i][0] != '\0')
+    {
+        if (    retrieve_all
+             || (    strlen(command) <= strlen(comps[i])
+                  && 0 == strncasecmp(command, comps[i], strlen(command)) ) )
+        {
+            completions[c] = malloc(strlen(comps[i]) + 1);
+            strcpy(completions[c], comps[i]);
+            c++;
+        }
+        i++;
+    }
+    return c;
+}
+
+static void request_abort_cb(struct cli_def *cli)
+{
+    cli_error(cli, "\nCancelled.");
+}
+
 static int cmd_request(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))    
 {
-    cli_request(cli, request_cb, "Enter a value: ");
+    cli_request(cli, request_cb, request_completion_cb, request_abort_cb, "Enter a value: ");
     return CLI_OK;
 }
 

@@ -73,6 +73,8 @@ struct cli_def {
     char *request_prompt;
     int request_prior_state;
     int (*request_callback)(struct cli_def *, const char *);
+    int (*request_completion_cb)(struct cli_def *, const char *, char **, int);
+    void (*request_abort_cb)(struct cli_def *);
     int (*config_mode_callback)(struct cli_def *);
     void *user_context;
 };
@@ -143,7 +145,7 @@ void cli_set_context(struct cli_def *cli, void *context);
 void *cli_get_context(struct cli_def *cli);
 
 // Prompt user for information
-int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), const char *format, ...);
+int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), int (*completion_cb)(struct cli_def *, const char *, char **, int), void (*abort_cb)(struct cli_def *), const char *format, ...);
 
 #ifdef __cplusplus
 }

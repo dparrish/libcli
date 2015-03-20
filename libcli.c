@@ -1167,6 +1167,30 @@ out:
     return k;
 }
 
+static int cli_get_request_completions(struct cli_def *cli, const char *command, char **completions, int max_completions)
+{
+    int k=0;
+
+    if (!command) return 0;
+    while (isspace(*command))
+        command++;
+
+    // Consult request completion callback.
+    if (cli->request_completion_cb)
+    {
+        if (cli->user_completion_free)
+        {
+            k = cli->request_completion_cb(cli, command, completions, max_completions);
+        }
+        else
+        {
+            cli_error(cli, "Internal server error processing tab completion");
+        }
+    }
+
+    return k;
+}
+
 static void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
 {
     int i;
@@ -1230,6 +1254,9 @@ static int pass_matches(const char *pass, const char *try)
 static int show_prompt(struct cli_def *cli, int sockfd)
 {
     int len = 0;
+
+    if (cli->state == STATE_REQUEST)
+        return write(sockfd, cli->request_prompt, strlen(cli->request_prompt));
 
     if (cli->hostname)
         len += write(sockfd, cli->hostname, strlen(cli->hostname));
@@ -1339,6 +1366,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
                     case STATE_NORMAL:
                     case STATE_ENABLE:
+                    case STATE_REQUEST:
                         show_prompt(cli, sockfd);
                         _write(sockfd, cmd, l);
                         if (cursor < l)
@@ -1351,10 +1379,6 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
                     case STATE_ENABLE_PASSWORD:
                         _write(sockfd, "Password: ", strlen("Password: "));
-                        break;
-
-                    case STATE_REQUEST:
-                        _write(sockfd, cli->request_prompt, strlen(cli->request_prompt));
                         break;
                 }
 
@@ -1511,7 +1535,28 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
             if (c == CTRL('C'))
             {
-                _write(sockfd, "\a", 1);
+                if (cli->state == STATE_REQUEST)
+                {
+                    // Restore previous state
+                    cli->state = cli->request_prior_state;
+
+                    // Re-init userprompt fields
+                    cli->request_prior_state = 0;
+                    free(cli->request_prompt);
+                    cli->request_prompt = NULL;
+
+                    // Call abort callback if available
+                    if (cli->request_abort_cb)
+                        cli->request_abort_cb(cli);
+
+                    cli_clear_line(sockfd, cmd, l, cursor);
+                    l = cursor = 0;
+                    cli->showprompt = 1;
+                }
+                else
+                {
+                    _write(sockfd, "\a", 1);
+                }
                 continue;
             }
 
@@ -1649,6 +1694,12 @@ int cli_loop(struct cli_def *cli, int sockfd)
             /* disable */
             if (c == CTRL('Z'))
             {
+                if (cli->state == STATE_REQUEST)
+                {
+                    _write(sockfd, "\a", 1);
+                    continue;
+                }
+
                 if (cli->mode != MODE_EXEC)
                 {
                     cli_clear_line(sockfd, cmd, l, cursor);
@@ -1667,12 +1718,20 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 int num_completions = 0;
                 int num_user_completions = 0;
 
-                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD || cli->state == STATE_REQUEST)
+                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
                     continue;
 
                 if (cursor != l) continue;
 
-                num_completions = cli_get_completions(cli, cmd, completions, user_completions, CLI_MAX_LINE_WORDS, CLI_MAX_LINE_WORDS, &num_user_completions);
+                if (cli->state == STATE_REQUEST)
+                {
+                    num_user_completions = cli_get_request_completions(cli, cmd, user_completions, CLI_MAX_LINE_WORDS);
+                }
+                else
+                {
+                    num_completions = cli_get_completions(cli, cmd, completions, user_completions, CLI_MAX_LINE_WORDS, CLI_MAX_LINE_WORDS, &num_user_completions);
+                }
+
                 if (num_user_completions > 0)
                 {
                     // Append user completions to end of the completions list
@@ -1738,7 +1797,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
             {
                 int history_found = 0;
 
-                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
+                if (cli->state == STATE_LOGIN || cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD || cli->state == STATE_REQUEST)
                     continue;
 
                 if (c == CTRL('P')) // Up
@@ -2478,7 +2537,7 @@ void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **,
     cli->user_completion_free = callback;
 }
 
-int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), const char *format, ...)
+int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), int (*completion_cb)(struct cli_def *, const char *, char **, int), void (*abort_cb)(struct cli_def *), const char *format, ...)
 {
     if (cli->state == STATE_REQUEST)
     {
@@ -2490,6 +2549,8 @@ int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const cha
     {
         // Set up CLI to accept the answer
         cli->request_callback = callback;
+        cli->request_completion_cb = completion_cb;
+        cli->request_abort_cb = abort_cb;
         cli->request_prior_state = cli->state;
         cli->state = STATE_REQUEST;
     }
