@@ -692,6 +692,7 @@ int cli_done(struct cli_def *cli)
     free_z(cli->hostname);
     free_z(cli->buffer);
     free_z(cli->hooks);
+    free_z(cli->request_prompt);
     free_z(cli);
 
     return CLI_OK;
