@@ -72,7 +72,7 @@ int winsock_init()
 int cmd_test(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
     int i;
-    cli_print(cli, "called %s with \"%s\"", __FUNCTION__, command);
+    cli_print(cli, "called %s with \"%s\"", __func__, command);
     cli_print(cli, "%d arguments:", argc);
     for (i = 0; i < argc; i++)
         cli_print(cli, "        %s", argv[i]);
