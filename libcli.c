@@ -1784,6 +1784,40 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 {
                     // More than one completion
                     lastchar = c;
+
+                    for (; l > 0; l--, cursor--)
+                    {
+                        if (cmd[l-1] == ' ' || cmd[l-1] == '|')
+                            break;
+                        _write(sockfd, "\b", 1);
+                    }
+                    int fillpos = 0;
+                    int filling = 1;
+                    while (filling)
+                    {
+                        int i;
+                        char fillchar = completions[0][fillpos];
+                        if (fillchar == '\0') break;
+
+                        for (i = 1; i < num_completions; i++)
+                        {
+                            if (completions[i][fillpos] != fillchar)
+                            {
+                                filling = 0;
+                                break;
+                            }
+                        }
+
+                        if (filling)
+                        {
+                            _write(sockfd, &fillchar, 1);
+                            cmd[l++] = fillchar;
+                            cursor = l;
+                        }
+
+                        fillpos++;
+                    }
+
                     _write(sockfd, "\a", 1);
                 }
 
