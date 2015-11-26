@@ -65,6 +65,7 @@ struct cli_def {
     time_t last_action;
     int telnet_protocol;
     void *user_context;
+    char comment_char ;
 };
 
 struct cli_filter {
