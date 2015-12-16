@@ -626,12 +626,13 @@ void cli_unregister_all(struct cli_def *cli, struct cli_command *command)
 
 int cli_done(struct cli_def *cli)
 {
-    struct unp *u = cli->users, *n;
+    struct unp *u , *n;
 
     if (!cli) return CLI_OK;
     cli_free_history(cli);
 
     // Free all users
+    u = cli->users;
     while (u)
     {
         if (u->username) free(u->username);
