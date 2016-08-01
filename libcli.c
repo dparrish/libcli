@@ -1133,7 +1133,10 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
         if (i < num_words - 1)
         {
             if (strlen(words[i]) < c->unique_len)
-                continue;
+            {
+                if (strncasecmp(c->command, words[i], strlen(c->command)))
+                    continue;
+            }
 
             n = c->children;
             i++;
