@@ -11,6 +11,11 @@ extern "C" {
 #include <stdarg.h>
 #include <sys/time.h>
 
+#define LIBCLI_VERSION_MAJOR    1
+#define LIBCLI_VERISON_MINOR    9
+#define LIBCLI_VERISON_REVISION 7
+#define LIBCLI_VERSION          ((LIBCLI_VERSION_MAJOR << 16) | (LIBCLI_VERSION_MINOR << 8) | LIBCLI_VERSION_REVISION)
+
 #define CLI_OK                  0
 #define CLI_ERROR               -1
 #define CLI_QUIT                -2
