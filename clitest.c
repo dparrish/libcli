@@ -119,7 +119,7 @@ int cmd_set(struct cli_def *cli, UNUSED(const char *command), char *argv[],
     return CLI_OK;
 }
 
-static int intf_completion(struct cli_def *cli, const char *command, char *argv[], int argc, char **completions, int max_completions)
+static int intf_completion(struct cli_def *cli, const char *command, char *argv[], int argc, struct cli_completion* completions, int max_completions)
 {
     // Legal interface types, terminated with empty string
     const char intfs[][20] = { "test0/0", "" };
@@ -136,8 +136,9 @@ static int intf_completion(struct cli_def *cli, const char *command, char *argv[
              || (    strlen(argv[0]) <= strlen(intfs[i])
                   && 0 == strncasecmp(argv[0], intfs[i], strlen(argv[0])) ) )
         {
-            completions[c] = malloc(strlen(intfs[i]) + 1);
-            strcpy(completions[c], intfs[i]);
+            completions[c].word = malloc(strlen(intfs[i]) + 1);
+            strcpy(completions[c].word, intfs[i]);
+            completions[c].help = 0;
             c++;
         }
         i++;
@@ -146,13 +147,14 @@ static int intf_completion(struct cli_def *cli, const char *command, char *argv[
     return c;
 }
 
-static void free_completion(char **completions, int ncompletions)
+static void free_completion(struct cli_completion* completions, int ncompletions)
 {
     int i;
-    char **c;
+    struct cli_completion* c;
     for (i = 0, c = completions; i < ncompletions; i++, c++)
     {
-        if (*c) free(*c);
+        if (c->word) free(c->word);
+        if (c->help) free(c->help);
     }
 }
 
@@ -285,10 +287,11 @@ static int request_cb(struct cli_def *cli, const char *response)
     return CLI_OK;
 }
 
-static int request_completion_cb(struct cli_def *cli, const char *command, char **completions, int max_completions)
+static int request_completion_cb(struct cli_def *cli, const char *command, struct cli_completion* completions, int max_completions)
 {
-    // Legal completions list, terminated with empty string
+    // Legal completions list, terminated with empty strings
     const char comps[][20] = { "fred", "nerk", "hello", "friend", "" };
+    const char helps[][40] = { "My command fred", "my command nerk", "the hello command", "and the friend command", "" };
 
     int retrieve_all = (command[0] == '\0');       // Tab on empty string; return all completions
 
@@ -299,8 +302,10 @@ static int request_completion_cb(struct cli_def *cli, const char *command, char 
              || (    strlen(command) <= strlen(comps[i])
                   && 0 == strncasecmp(command, comps[i], strlen(command)) ) )
         {
-            completions[c] = malloc(strlen(comps[i]) + 1);
-            strcpy(completions[c], comps[i]);
+            completions[c].word = malloc(strlen(comps[i]) + 1);
+            strcpy(completions[c].word, comps[i]);
+            completions[c].help = malloc(strlen(helps[i]) + 1);
+            strcpy(completions[c].help, helps[i]);
             c++;
         }
         i++;
@@ -313,7 +318,7 @@ static void request_abort_cb(struct cli_def *cli)
     cli_error(cli, "\nCancelled.");
 }
 
-static int cmd_request(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))    
+static int cmd_request(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
 {
     cli_request(cli, request_cb, request_completion_cb, request_abort_cb, "Enter a value: ");
     return CLI_OK;

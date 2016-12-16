@@ -471,12 +471,15 @@ int cli_unregister_command(struct cli_def *cli, const char *command)
     return CLI_OK;
 }
 
-int cli_show_help(struct cli_def *cli, struct cli_command *c)
+int cli_show_help(struct cli_def *cli, struct cli_command *c, const char *stem)
 {
     struct cli_command *p;
 
     for (p = c; p; p = p->next)
     {
+        if (stem && strlen(stem) > strlen(p->command)) continue;
+        if (stem && strncasecmp(p->command, stem, strlen(stem)) != 0) continue;
+
         if (p->command && p->callback && cli->privilege >= p->privilege &&
             (p->mode == cli->mode || p->mode == MODE_ANY))
         {
@@ -484,7 +487,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c)
         }
 
         if (p->children)
-            cli_show_help(cli, p->children);
+            cli_show_help(cli, p->children, NULL);
     }
 
     return CLI_OK;
@@ -536,7 +539,7 @@ int cli_int_help(struct cli_def *cli, const char *command, char *argv[], int arg
 {
     SET_HOOK(cli, HOOK_HELP, command, argv, argc);
     cli_error(cli, "\nCommands available:");
-    cli_show_help(cli, cli->commands);
+    cli_show_help(cli, cli->commands, NULL);
     return CLI_OK;
 }
 
@@ -1070,7 +1073,7 @@ int cli_run_command(struct cli_def *cli, const char *command)
     return CLI_OK;
 }
 
-static int cli_get_completions(struct cli_def *cli, const char *command, char **completions, char **user_completions, int max_completions, int max_user_completions, int *num_user_completions)
+static int cli_get_completions(struct cli_def *cli, const char *command, struct cli_completion* completions, struct cli_completion* user_completions, int max_completions, int max_user_completions, int *num_user_completions)
 {
     struct cli_command *c;
     struct cli_command *n;
@@ -1110,10 +1113,14 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
         for (i = 0; filter_cmds[i].cmd && k < max_completions; i++)
         {
             if (!len || (len < strlen(filter_cmds[i].cmd) && !strncmp(filter_cmds[i].cmd, words[num_words - 1], len)))
-                completions[k++] = (char *)filter_cmds[i].cmd;
+            {
+                completions[k].word = (char *)filter_cmds[i].cmd;
+                completions[k].help = (char *)filter_cmds[i].help;
+                k++;
+            }
         }
 
-        completions[k] = NULL;
+//        completions[k] = { NULL, NULL };
         goto out;
     }
 
@@ -1145,7 +1152,9 @@ static int cli_get_completions(struct cli_def *cli, const char *command, char **
             continue;
         }
 
-        completions[k++] = c->command;
+        completions[k].word = c->command;
+        completions[k].help = c->help;
+        k++;
     }
 
     if (completed && !k)
@@ -1171,7 +1180,7 @@ out:
     return k;
 }
 
-static int cli_get_request_completions(struct cli_def *cli, const char *command, char **completions, int max_completions)
+static int cli_get_request_completions(struct cli_def *cli, const char *command, struct cli_completion* completions, int max_completions)
 {
     int k=0;
 
@@ -1717,8 +1726,8 @@ int cli_loop(struct cli_def *cli, int sockfd)
             /* TAB completion */
             if (c == CTRL('I'))
             {
-                char *completions[CLI_MAX_LINE_WORDS * 2];
-                char *user_completions[CLI_MAX_LINE_WORDS];
+                struct cli_completion completions[CLI_MAX_LINE_WORDS * 2];
+                struct cli_completion user_completions[CLI_MAX_LINE_WORDS];
                 int num_completions = 0;
                 int num_user_completions = 0;
 
@@ -1760,28 +1769,29 @@ int cli_loop(struct cli_def *cli, int sockfd)
                             break;
                         _write(sockfd, "\b", 1);
                     }
-                    strcpy((cmd + l), completions[0]);
-                    l += strlen(completions[0]);
+                    strcpy((cmd + l), completions[0].word);
+                    l += strlen(completions[0].word);
                     cmd[l++] = ' ';
                     cursor = l;
-                    _write(sockfd, completions[0], strlen(completions[0]));
+                    _write(sockfd, completions[0].word, strlen(completions[0].word));
                     _write(sockfd, " ", 1);
                 }
                 else if (lastchar == CTRL('I'))
                 {
                     // double tab
                     int i;
-                    _write(sockfd, "\r\n", 2);
+                    const char *header = "\r\nAvailable completions:\r\n";
+                    _write(sockfd, header, strlen(header));
                     for (i = 0; i < num_completions; i++)
                     {
-                        _write(sockfd, completions[i], strlen(completions[i]));
-                        if (i % 4 == 3)
-                            _write(sockfd, "\r\n", 2);
+                        char line[1024];
+                        if (completions[i].help)
+                            snprintf(line, sizeof(line), "  %-20s %s\r\n", completions[i].word, completions[i].help);
                         else
-                            _write(sockfd, "     ", 1);
+                            snprintf(line, sizeof(line), "  %s\r\n", completions[i].word);
+                        _write(sockfd, line, strlen(line));
                     }
-                    if (i % 4 != 3) _write(sockfd, "\r\n", 2);
-                        cli->showprompt = 1;
+                    cli->showprompt = 1;
                 }
                 else
                 {
@@ -1799,12 +1809,12 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     while (filling)
                     {
                         int i;
-                        char fillchar = completions[0][fillpos];
+                        char fillchar = completions[0].word[fillpos];
                         if (fillchar == '\0') break;
 
                         for (i = 1; i < num_completions; i++)
                         {
-                            if (completions[i][fillpos] != fillchar)
+                            if (completions[i].word[fillpos] != fillchar)
                             {
                                 filling = 0;
                                 break;
@@ -2565,17 +2575,17 @@ int cli_register_hook(struct cli_def *cli, const char *command, hook_cb hook)
 }
 
 void cli_register_completion_cb(struct cli_command *cmd,
-                                int (*callback)(struct cli_def *, const char *, char **, int, char **, int))
+                                int (*callback)(struct cli_def *, const char *, char**, int, struct cli_completion*, int))
 {
     cmd->get_completions = callback;
 }
 
-void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **, int))
+void cli_register_completion_free(struct cli_def *cli, void (*callback)(struct cli_completion*, int))
 {
     cli->user_completion_free = callback;
 }
 
-int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), int (*completion_cb)(struct cli_def *, const char *, char **, int), void (*abort_cb)(struct cli_def *), const char *format, ...)
+int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), int (*completion_cb)(struct cli_def *, const char *, struct cli_completion*, int), void (*abort_cb)(struct cli_def *), const char *format, ...)
 {
     if (cli->state == STATE_REQUEST)
     {
@@ -2610,4 +2620,9 @@ int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const cha
 void cli_register_configmode_cb(struct cli_def *cli, int (*callback)(struct cli_def *))
 {
     cli->config_mode_callback = callback;
+}
+
+void cli_register_completions_help_cb(struct cli_def *cli, void (*callback)(struct cli_def *, const char *, struct cli_completion* , int))
+{
+    cli->completions_help_cb = callback;
 }

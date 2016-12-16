@@ -37,6 +37,12 @@ extern "C" {
 #define CLI_MAX_LINE_LENGTH     4096
 #define CLI_MAX_LINE_WORDS      128
 
+struct cli_completion
+{
+    char* word;
+    char* help;
+};
+
 struct cli_def {
     int completion_callback;
     struct cli_command *commands;
@@ -69,13 +75,14 @@ struct cli_def {
     time_t last_action;
     int telnet_protocol;
     void *hooks;
-    void (*user_completion_free)(char **, int);
+    void (*user_completion_free)(struct cli_completion*, int);
     char *request_prompt;
     int request_prior_state;
     int (*request_callback)(struct cli_def *, const char *);
-    int (*request_completion_cb)(struct cli_def *, const char *, char **, int);
+    int (*request_completion_cb)(struct cli_def *, const char *, struct cli_completion*, int);
     void (*request_abort_cb)(struct cli_def *);
     int (*config_mode_callback)(struct cli_def *);
+    void (*completions_help_cb)(struct cli_def *, const char *, struct cli_completion*, int);
     void *user_context;
 };
 
@@ -92,7 +99,7 @@ struct cli_command {
     char *help;
     int privilege;
     int mode;
-    int (*get_completions)(struct cli_def *, const char *, char **, int, char **, int);
+    int (*get_completions)(struct cli_def *, const char *, char **, int, struct cli_completion*, int);
     struct cli_command *next;
     struct cli_command *children;
     struct cli_command *parent;
@@ -132,9 +139,10 @@ void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, in
 int cli_register_hook(struct cli_def *cli, const char *command,
                        int (*hook)(struct cli_def *, const char *, char **, int));
 void cli_register_completion_cb(struct cli_command *cmd,
-                                int (*callback)(struct cli_def *, const char *, char **, int, char **, int));
-void cli_register_completion_free(struct cli_def *cli, void (*callback)(char **, int));
+                                int (*callback)(struct cli_def *, const char *, char **, int, struct cli_completion*, int));
+void cli_register_completion_free(struct cli_def *cli, void (*callback)(struct cli_completion*, int));
 void cli_register_configmode_cb(struct cli_def *cli, int (*callback)(struct cli_def *));
+void cli_register_completions_help_cb(struct cli_def *cli, void (*callback)(struct cli_def *, const char *, struct cli_completion*, int));
 
 // Enable or disable telnet protocol negotiation.
 // Note that this is enabled by default and must be changed before cli_loop() is run.
@@ -145,7 +153,7 @@ void cli_set_context(struct cli_def *cli, void *context);
 void *cli_get_context(struct cli_def *cli);
 
 // Prompt user for information
-int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), int (*completion_cb)(struct cli_def *, const char *, char **, int), void (*abort_cb)(struct cli_def *), const char *format, ...);
+int cli_request(struct cli_def *cli, int (*callback)(struct cli_def *, const char *), int (*completion_cb)(struct cli_def *, const char *, struct cli_completion*, int), void (*abort_cb)(struct cli_def *), const char *format, ...);
 
 #ifdef __cplusplus
 }
