@@ -295,6 +295,11 @@ void cli_set_promptchar(struct cli_def *cli, const char *promptchar)
     cli->promptchar = strdup(promptchar);
 }
 
+static int cli_can_render(struct cli_def *cli, struct cli_command *c)
+{
+    return (cli->privilege >= c->privilege && (c->mode == cli->mode || c->mode == MODE_ANY));
+}
+
 static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
 {
     struct cli_command *c, *p;
@@ -304,7 +309,7 @@ static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
     for (c = commands; c; c = c->next)
     {
         c->unique_len = strlen(c->command);
-        if ((c->mode != MODE_ANY && c->mode != cli->mode) || c->privilege > cli->privilege)
+        if (!cli_can_render(cli, c))
             continue;
 
         c->unique_len = 1;
@@ -313,7 +318,7 @@ static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
             if (c == p)
                 continue;
 
-            if ((p->mode != MODE_ANY && p->mode != cli->mode) || p->privilege > cli->privilege)
+            if (!cli_can_render(cli, c))
                 continue;
 
             cp = c->command;
@@ -480,8 +485,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c, const char *stem)
         if (stem && strlen(stem) > strlen(p->command)) continue;
         if (stem && strncasecmp(p->command, stem, strlen(stem)) != 0) continue;
 
-        if (p->command && p->callback && cli->privilege >= p->privilege &&
-            (p->mode == cli->mode || p->mode == MODE_ANY))
+        if (p->command && p->callback && cli_can_render(cli, p))
         {
             cli_error(cli, "  %-20s %s", cli_command_name(cli, p), (p->help != NULL ? p->help : ""));
         }
@@ -849,8 +853,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
         {
             if (strncasecmp(c->command, words[start_word], l) == 0
                 && (c->callback || c->children)
-                && cli->privilege >= c->privilege
-                && (c->mode == cli->mode || c->mode == MODE_ANY))
+                && cli_can_render(cli, c))
                     cli_error(cli, "  %-20s %s", c->command, (c->help != NULL ? c->help : ""));
         }
 
@@ -1128,10 +1131,7 @@ static int cli_get_completions(struct cli_def *cli, const char *command, struct 
     {
         n = c->next;
 
-        if (cli->privilege < c->privilege)
-            continue;
-
-        if (c->mode != cli->mode && c->mode != MODE_ANY)
+        if (!cli_can_render(cli, c))
             continue;
 
         if (words[i] && strncasecmp(c->command, words[i], strlen(words[i])))
