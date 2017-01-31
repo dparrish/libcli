@@ -297,7 +297,11 @@ void cli_set_promptchar(struct cli_def *cli, const char *promptchar)
 
 static int cli_can_render(struct cli_def *cli, struct cli_command *c)
 {
-    return (cli->privilege >= c->privilege && (c->mode == cli->mode || c->mode == MODE_ANY));
+    if (c->privilege > cli->privilege) return 0;
+    if (c->mode == MODE_ANY) return 1;
+    if (c->mode == MODE_ANY_CONFIG && cli->mode >= MODE_CONFIG) return 1;
+    if (c->mode == cli->mode) return 1;
+    return 0;
 }
 
 static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
@@ -318,7 +322,7 @@ static int cli_build_shortest(struct cli_def *cli, struct cli_command *commands)
             if (c == p)
                 continue;
 
-            if (!cli_can_render(cli, c))
+            if (!cli_can_render(cli, p))
                 continue;
 
             cp = c->command;
@@ -598,6 +602,12 @@ int cli_int_configure_terminal(struct cli_def *cli, UNUSED(const char *command),
     return CLI_OK;
 }
 
+int cli_int_end(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc))
+{
+    cli_set_configmode(cli, MODE_EXEC, NULL);
+    return CLI_OK;
+}
+
 struct cli_def *cli_init()
 {
     struct cli_def *cli;
@@ -635,6 +645,7 @@ struct cli_def *cli_init()
     c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
     cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC,
                          "Configure from the terminal");
+    cli_register_command(cli, 0, "end", cli_int_end, PRIVILEGE_UNPRIVILEGED, MODE_ANY_CONFIG, "Exit configuration mode");
 
     cli->privilege = cli->mode = -1;
     cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -872,7 +883,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
             continue;
 
         AGAIN:
-        if (c->mode == cli->mode || (c->mode == MODE_ANY && again_any != NULL))
+        if (c->mode == cli->mode || (c->mode == MODE_ANY_CONFIG && cli->mode >= MODE_CONFIG) || (c->mode == MODE_ANY && again_any != NULL))
         {
             int rc = CLI_OK;
             int f;

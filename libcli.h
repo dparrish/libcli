@@ -24,6 +24,7 @@ extern "C" {
 
 #define PRIVILEGE_UNPRIVILEGED  0
 #define PRIVILEGE_PRIVILEGED    15
+#define MODE_ANY_CONFIG         -2
 #define MODE_ANY                -1
 #define MODE_EXEC               0
 #define MODE_CONFIG             1
