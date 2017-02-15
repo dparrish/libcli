@@ -19,6 +19,8 @@
 #ifndef WIN32
 #include <regex.h>
 #endif
+#include <sys/types.h>
+#include <sys/socket.h>
 #include "libcli.h"
 
 // vim:sw=4 tw=120 et
@@ -162,15 +164,22 @@ static ssize_t _write(int fd, const void *buf, size_t count)
 {
     size_t written = 0;
     ssize_t thisTime =0;
+
     while (count != written)
     {
-        thisTime = write(fd, (char*)buf + written, count - written);
+        thisTime = send(fd, (char*)buf + written, count - written, MSG_NOSIGNAL);
+
         if (thisTime == -1)
         {
+            perror("send");
             if (errno == EINTR)
+            {
                 continue;
+            }
             else
+            {
                 return -1;
+            }
         }
         written += thisTime;
     }
@@ -491,7 +500,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c, const char *stem)
 
         if (p->command && p->callback && cli_can_render(cli, p))
         {
-            cli_error(cli, "  %-20s %s", cli_command_name(cli, p), (p->help != NULL ? p->help : ""));
+            cli_plain(cli, "  %-20s %s", cli_command_name(cli, p), (p->help != NULL ? p->help : ""));
         }
 
         if (p->children)
@@ -546,7 +555,7 @@ int cli_int_disable(struct cli_def *cli, const char *command, char *argv[], int 
 int cli_int_help(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
     SET_HOOK(cli, HOOK_HELP, command, argv, argc);
-    cli_error(cli, "\nCommands available:");
+    cli_plain(cli, "\nCommands available:");
     cli_show_help(cli, cli->commands, NULL);
     return CLI_OK;
 }
@@ -556,11 +565,11 @@ int cli_int_history(struct cli_def *cli, const char *command, char *argv[], int 
     SET_HOOK(cli, HOOK_HISTORY, command, argv, argc);
     int i;
 
-    cli_error(cli, "\nCommand history:");
+    cli_plain(cli, "\nCommand history:");
     for (i = 0; i < MAX_HISTORY; i++)
     {
         if (cli->history[i])
-            cli_error(cli, "%3d. %s", i, cli->history[i]);
+            cli_plain(cli, "%3d. %s", i, cli->history[i]);
     }
 
     return CLI_OK;
@@ -857,7 +866,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
         int l = strlen(words[start_word])-1;
 
         if (commands->parent && commands->parent->callback)
-            cli_error(cli, "%-20s %s", cli_command_name(cli, commands->parent),
+            cli_plain(cli, "%-20s %s", cli_command_name(cli, commands->parent),
                       (commands->parent->help != NULL ? commands->parent->help : ""));
 
         for (c = commands; c; c = c->next)
@@ -865,7 +874,7 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
             if (strncasecmp(c->command, words[start_word], l) == 0
                 && (c->callback || c->children)
                 && cli_can_render(cli, c))
-                    cli_error(cli, "  %-20s %s", c->command, (c->help != NULL ? c->help : ""));
+                    cli_plain(cli, "  %-20s %s", c->command, (c->help != NULL ? c->help : ""));
         }
 
         return CLI_OK;
@@ -958,15 +967,15 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
                     {
                         int i;
                         for (i = 0; filter_cmds[i].cmd; i++)
-                            cli_error(cli, "  %-20s %s", filter_cmds[i].cmd, filter_cmds[i].help );
+                            cli_plain(cli, "  %-20s %s", filter_cmds[i].cmd, filter_cmds[i].help );
                     }
                     else
                     {
                         if (argv[0][0] != 'c') // count
-                            cli_error(cli, "  WORD");
+                            cli_plain(cli, "  WORD");
 
                         if (argc > 2 || argv[0][0] == 'c') // count
-                            cli_error(cli, "  <cr>");
+                            cli_plain(cli, "  <cr>");
                     }
 
                     return CLI_OK;
@@ -1221,7 +1230,7 @@ static void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
     if (cursor < l)
     {
         for (i = 0; i < (l - cursor); i++)
-            _write(sockfd, " ", 1);
+            if (_write(sockfd, " ", 1) != 1) return;
     }
     for (i = 0; i < l; i++)
         cmd[i] = '\b';
@@ -1229,7 +1238,7 @@ static void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
         cmd[i] = ' ';
     for (; i < l * 3; i++)
         cmd[i] = '\b';
-    _write(sockfd, cmd, i);
+    if (_write(sockfd, cmd, i) != i) return;
     memset((char *)cmd, 0, i);
     l = cursor = 0;
 }
@@ -1280,15 +1289,17 @@ static int show_prompt(struct cli_def *cli, int sockfd)
     int len = 0;
 
     if (cli->state == STATE_REQUEST)
-        return write(sockfd, cli->request_prompt, strlen(cli->request_prompt));
+        return _write(sockfd, cli->request_prompt, strlen(cli->request_prompt));
 
-    if (cli->hostname)
-        len += write(sockfd, cli->hostname, strlen(cli->hostname));
+    if (cli->hostname && (_write(sockfd, cli->hostname, strlen(cli->hostname)) == (ssize_t)strlen(cli->hostname)))
+        len += strlen(cli->hostname);
 
-    if (cli->modestring)
-        len += write(sockfd, cli->modestring, strlen(cli->modestring));
+    if (cli->modestring && (_write(sockfd, cli->modestring, strlen(cli->modestring)) == (ssize_t)strlen(cli->modestring)))
+        len += strlen(cli->modestring);
 
-    return len + write(sockfd, cli->promptchar, strlen(cli->promptchar));
+    if (cli->promptchar && _write(sockfd, cli->promptchar, strlen(cli->promptchar)) == (ssize_t)strlen(cli->promptchar))
+        len += strlen(cli->promptchar);
+    return (len ? len : -1);
 }
 
 int cli_loop(struct cli_def *cli, int sockfd)
@@ -1310,7 +1321,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
             "\xFF\xFB\x01"
             "\xFF\xFD\x03"
             "\xFF\xFD\x01";
-        _write(sockfd, negotiate, strlen(negotiate));
+        if (_write(sockfd, negotiate, strlen(negotiate)) != (ssize_t)strlen(negotiate)) return CLI_ERROR;
     }
 
     if ((cmd = malloc(CLI_MAX_LINE_LENGTH)) == NULL)
@@ -1324,13 +1335,11 @@ int cli_loop(struct cli_def *cli, int sockfd)
         return CLI_ERROR;
     cli->client->_file = sockfd;
 #else
-    if (!(cli->client = fdopen(sockfd, "w+")))
-        return CLI_ERROR;
+    cli->client = sockfd;
 #endif
 
-    setbuf(cli->client, NULL);
     if (cli->banner)
-        cli_error(cli, "%s", cli->banner);
+        cli_plain(cli, "%s", cli->banner);
 
     // Set the last action now so we don't time immediately
     if (cli->idle_timeout)
@@ -1376,33 +1385,33 @@ int cli_loop(struct cli_def *cli, int sockfd)
             if (cli->showprompt)
             {
                 if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
-                    _write(sockfd, "\r\n", 2);
+                    if (_write(sockfd, "\r\n", 2) != 2) return CLI_ERROR;
 
                 switch (cli->state)
                 {
                     case STATE_LOGIN:
-                        _write(sockfd, "Username: ", strlen("Username: "));
+                        if (_write(sockfd, "Username: ", strlen("Username: ")) != strlen("Username: ")) return CLI_ERROR;
                         break;
 
                     case STATE_PASSWORD:
-                        _write(sockfd, "Password: ", strlen("Password: "));
+                        if (_write(sockfd, "Password: ", strlen("Password: ")) != strlen("Password: ")) return CLI_ERROR;
                         break;
 
                     case STATE_NORMAL:
                     case STATE_ENABLE:
                     case STATE_REQUEST:
                         show_prompt(cli, sockfd);
-                        _write(sockfd, cmd, l);
+                        if (_write(sockfd, cmd, l) != l) return CLI_ERROR;
                         if (cursor < l)
                         {
                             int n = l - cursor;
                             while (n--)
-                                _write(sockfd, "\b", 1);
+                                if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
                         }
                         break;
 
                     case STATE_ENABLE_PASSWORD:
-                        _write(sockfd, "Password: ", strlen("Password: "));
+                        if (_write(sockfd, "Password: ", strlen("Password: ")) != strlen("Password: ")) return CLI_ERROR;
                         break;
                 }
 
@@ -1547,7 +1556,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
             if (c == '\r')
             {
                 if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
-                    _write(sockfd, "\r\n", 2);
+                    if (_write(sockfd, "\r\n", 2) != 2)  return CLI_ERROR;
                 break;
             }
 
@@ -1579,7 +1588,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 }
                 else
                 {
-                    _write(sockfd, "\a", 1);
+                    if (_write(sockfd, "\a", 1) != 1)  return CLI_ERROR;
                 }
                 continue;
             }
@@ -1612,7 +1621,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 {
                     if (l == 0 || cursor == 0)
                     {
-                        _write(sockfd, "\a", 1);
+                        if (_write(sockfd, "\a", 1) != 1) return CLI_ERROR;
                         continue;
                     }
 
@@ -1627,7 +1636,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                         {
                             cmd[--cursor] = 0;
                             if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
-                                _write(sockfd, "\b \b", 3);
+                                if (_write(sockfd, "\b \b", 3) != 3) return CLI_ERROR;
                         }
                         else
                         {
@@ -1636,11 +1645,11 @@ int cli_loop(struct cli_def *cli, int sockfd)
                             if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
                             {
                                 for (i = cursor; i <= l; i++) cmd[i] = cmd[i+1];
-                                _write(sockfd, "\b", 1);
-                                _write(sockfd, cmd + cursor, strlen(cmd + cursor));
-                                _write(sockfd, " ", 1);
+                                if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
+                                if (_write(sockfd, cmd + cursor, strlen(cmd + cursor)) != (ssize_t)strlen(cmd + cursor)) return CLI_ERROR;
+                                if (_write(sockfd, " ", 1) != 1) return CLI_ERROR;
                                 for (i = 0; i <= (int)strlen(cmd + cursor); i++)
-                                    _write(sockfd, "\b", 1);
+                                    if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
                             }
                         }
                         l--;
@@ -1659,12 +1668,12 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD)
                     continue;
 
-                _write(sockfd, "\r\n", 2);
-                show_prompt(cli, sockfd);
-                _write(sockfd, cmd, l);
+                if (_write(sockfd, "\r\n", 2) != 2) return CLI_ERROR;
+                if (show_prompt(cli, sockfd) < 0)  return CLI_ERROR;
+                if (_write(sockfd, cmd, l) != l)  return CLI_ERROR;
 
                 for (i = 0; i < cursorback; i++)
-                    _write(sockfd, "\b", 1);
+                    if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
 
                 continue;
             }
@@ -1691,10 +1700,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 {
                     int c;
                     for (c = cursor; c < l; c++)
-                        _write(sockfd, " ", 1);
+                        if (_write(sockfd, " ", 1) != 1) return CLI_ERROR;
 
                     for (c = cursor; c < l; c++)
-                        _write(sockfd, "\b", 1);
+                        if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
                 }
 
                 memset(cmd + cursor, 0, l - cursor);
@@ -1720,7 +1729,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
             {
                 if (cli->state == STATE_REQUEST)
                 {
-                    _write(sockfd, "\a", 1);
+                    if (_write(sockfd, "\a", 1) != 1) return CLI_ERROR;
                     continue;
                 }
 
@@ -1769,7 +1778,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 }
                 if (num_completions == 0)
                 {
-                    _write(sockfd, "\a", 1);
+                    if (_write(sockfd, "\a", 1) != 1) return CLI_ERROR;
                 }
                 else if (num_completions == 1)
                 {
@@ -1778,21 +1787,21 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     {
                         if (cmd[l-1] == ' ' || cmd[l-1] == '|')
                             break;
-                        _write(sockfd, "\b", 1);
+                        if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
                     }
                     strcpy((cmd + l), completions[0].word);
                     l += strlen(completions[0].word);
                     cmd[l++] = ' ';
                     cursor = l;
-                    _write(sockfd, completions[0].word, strlen(completions[0].word));
-                    _write(sockfd, " ", 1);
+                    if (_write(sockfd, completions[0].word, strlen(completions[0].word)) != (ssize_t)strlen(completions[0].word)) return CLI_ERROR;
+                    if (_write(sockfd, " ", 1) != 1) return CLI_ERROR;
                 }
                 else if (lastchar == CTRL('I'))
                 {
                     // double tab
                     int i;
                     const char *header = "\r\nAvailable completions:\r\n";
-                    _write(sockfd, header, strlen(header));
+                    if (_write(sockfd, header, strlen(header)) != (ssize_t)strlen(header)) return CLI_ERROR;
                     for (i = 0; i < num_completions; i++)
                     {
                         char line[1024];
@@ -1800,7 +1809,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                             snprintf(line, sizeof(line), "  %-20s %s\r\n", completions[i].word, completions[i].help);
                         else
                             snprintf(line, sizeof(line), "  %s\r\n", completions[i].word);
-                        _write(sockfd, line, strlen(line));
+                        if (_write(sockfd, line, strlen(line)) != (ssize_t)strlen(line)) return CLI_ERROR;
                     }
                     cli->showprompt = 1;
                 }
@@ -1813,7 +1822,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     {
                         if (cmd[l-1] == ' ' || cmd[l-1] == '|')
                             break;
-                        _write(sockfd, "\b", 1);
+                        if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
                     }
                     int fillpos = 0;
                     int filling = 1;
@@ -1834,7 +1843,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
                         if (filling)
                         {
-                            _write(sockfd, &fillchar, 1);
+                            if (_write(sockfd, &fillchar, 1) != 1) return CLI_ERROR;
                             cmd[l++] = fillchar;
                             cursor = l;
                         }
@@ -1842,7 +1851,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                         fillpos++;
                     }
 
-                    _write(sockfd, "\a", 1);
+                    if (_write(sockfd, "\a", 1) != 1) return CLI_ERROR;
                 }
 
                 if (num_user_completions && cli->user_completion_free)
@@ -1906,7 +1915,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     memset(cmd, 0, CLI_MAX_LINE_LENGTH);
                     strncpy(cmd, cli->history[in_history], CLI_MAX_LINE_LENGTH - 1);
                     l = cursor = strlen(cmd);
-                    _write(sockfd, cmd, l);
+                    if (_write(sockfd, cmd, l) != l) return CLI_ERROR;
                 }
 
                 continue;
@@ -1920,7 +1929,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     if (cursor)
                     {
                         if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
-                            _write(sockfd, "\b", 1);
+                            if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
 
                         cursor--;
                     }
@@ -1930,7 +1939,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     if (cursor < l)
                     {
                         if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
-                            _write(sockfd, &cmd[cursor], 1);
+                            if (_write(sockfd, &cmd[cursor], 1) != 1) return CLI_ERROR;
 
                         cursor++;
                     }
@@ -1946,7 +1955,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 {
                     while (cursor--)
                     {
-                        _write(sockfd, "\b", 1);
+                        if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
                     }
                 }
 
@@ -1960,7 +1969,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 if (cursor < l)
                 {
                     if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
-                        _write(sockfd, &cmd[cursor], l - cursor);
+                        if (_write(sockfd, &cmd[cursor], l - cursor) != (l - cursor)) return CLI_ERROR;
 
                     cursor = l;
                 }
@@ -1980,7 +1989,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
                 }
                 else
                 {
-                    _write(sockfd, "\a", 1);
+                    if (_write(sockfd, "\a", 1) != 1) return CLI_ERROR;
                     continue;
                 }
             }
@@ -1997,9 +2006,9 @@ int cli_loop(struct cli_def *cli, int sockfd)
                     // Write what we've just added
                     cmd[cursor] = c;
 
-                    _write(sockfd, &cmd[cursor], l - cursor + 1);
+                    if (_write(sockfd, &cmd[cursor], l - cursor + 1) != (l - cursor + 1)) return CLI_ERROR;
                     for (i = 0; i < (l - cursor + 1); i++)
-                        _write(sockfd, "\b", 1);
+                        if (_write(sockfd, "\b", 1) != 1) return CLI_ERROR;
                     l++;
                 }
                 else
@@ -2013,12 +2022,12 @@ int cli_loop(struct cli_def *cli, int sockfd)
             {
                 if (c == '?' && cursor == l)
                 {
-                    _write(sockfd, "\r\n", 2);
+                    if (_write(sockfd, "\r\n", 2) != 2) return CLI_ERROR;
                     oldcmd = cmd;
                     oldl = cursor = l - 1;
                     break;
                 }
-                _write(sockfd, &c, 1);
+                if (_write(sockfd, &c, 1) != 1) return CLI_ERROR;
             }
 
             oldcmd = 0;
@@ -2068,7 +2077,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
             if (allowed)
             {
-                cli_error(cli, " ");
+                cli_plain(cli, " ");
                 cli->state = STATE_NORMAL;
             }
             else
@@ -2144,7 +2153,6 @@ int cli_loop(struct cli_def *cli, int sockfd)
     free_z(password);
     free_z(cmd);
 
-    fclose(cli->client);
     cli->client = 0;
     return CLI_OK;
 }
@@ -2219,7 +2227,6 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
         break;
     }
 
-
     p = cli->buffer;
     do
     {
@@ -2242,7 +2249,10 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
             if (cli->print_callback)
                 cli->print_callback(cli, p);
             else if (cli->client)
-                fprintf(cli->client, "%s\r\n", p);
+            {
+                if (_write(cli->client,p,strlen(p)) != (ssize_t)strlen(p)) return;
+                if (_write(cli->client, "\r\n",2) != 2) return;
+            }
         }
 
         p = next;
@@ -2279,13 +2289,26 @@ void cli_print(struct cli_def *cli, const char *format, ...)
     va_end(ap);
 }
 
-void cli_error(struct cli_def *cli, const char *format, ...)
+void cli_plain(struct cli_def *cli, const char *format, ...)
 {
     va_list ap;
 
     va_start(ap, format);
     _print(cli, PRINT_PLAIN, format, ap);
     va_end(ap);
+}
+
+void cli_error(struct cli_def *cli, const char *format, ...)
+{
+    // Always send an alert character with error messages
+    if (cli && (_write(cli->client, "\a", 1) == 1))
+    {
+        va_list ap;
+
+        va_start(ap, format);
+        _print(cli, PRINT_PLAIN, format, ap);
+        va_end(ap);
+    }
 }
 
 struct cli_match_filter_state
@@ -2307,7 +2330,7 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
     if (argc < 2)
     {
         if (cli->client)
-            fprintf(cli->client, "Match filter requires an argument\r\n");
+            cli_plain(cli, "Match filter requires an argument\r\n");
 
         return CLI_ERROR;
     }
@@ -2374,7 +2397,7 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
     if ((i = regcomp(&state->match.re, p, rflags)))
     {
         if (cli->client)
-            fprintf(cli->client, "Invalid pattern \"%s\"\r\n", p);
+            cli_plain(cli, "Invalid pattern \"%s\"\r\n", p);
 
         free_z(p);
         return CLI_ERROR;
@@ -2439,7 +2462,7 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
         if (argc < 3)
         {
             if (cli->client)
-                fprintf(cli->client, "Between filter requires 2 arguments\r\n");
+                cli_plain(cli, "Between filter requires 2 arguments\r\n");
 
             return CLI_ERROR;
         }
@@ -2453,7 +2476,7 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
         if (argc < 2)
         {
             if (cli->client)
-                fprintf(cli->client, "Begin filter requires an argument\r\n");
+                cli_plain(cli, "Begin filter requires an argument\r\n");
 
             return CLI_ERROR;
         }
@@ -2501,7 +2524,7 @@ int cli_count_filter_init(struct cli_def *cli, int argc, UNUSED(char **argv), st
     if (argc > 1)
     {
         if (cli->client)
-            fprintf(cli->client, "Count filter does not take arguments\r\n");
+            cli_plain(cli, "Count filter does not take arguments\r\n");
 
         return CLI_ERROR;
     }
@@ -2521,7 +2544,7 @@ int cli_count_filter(struct cli_def *cli, const char *string, void *data)
     {
         // print count
         if (cli->client)
-            fprintf(cli->client, "%d\r\n", *count);
+            cli_plain(cli, "%d\r\n", *count);
 
         free(count);
         return CLI_OK;

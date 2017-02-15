@@ -63,7 +63,7 @@ struct cli_def {
     int state;
     struct cli_filter *filters;
     void (*print_callback)(struct cli_def *cli, const char *string);
-    FILE *client;
+    int client;
     /* internal buffers */
     void *conn;
     void *service;
@@ -132,6 +132,7 @@ void cli_regular_interval(struct cli_def *cli, int seconds);
 void cli_print(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_bufprint(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_vabufprint(struct cli_def *cli, const char *format, va_list ap);
+void cli_plain(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_error(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, const char *));
 void cli_free_history(struct cli_def *cli);
