@@ -378,27 +378,23 @@ int cli_set_configmode(struct cli_def *cli, int mode, const char *config_desc)
     int old = cli->mode;
     cli->mode = mode;
 
-    if (mode != old)
+    if (!cli->mode)
     {
-        if (!cli->mode)
-        {
-            // Not config mode
-            cli_set_modestring(cli, NULL);
-        }
-        else if (config_desc && *config_desc)
-        {
-            char string[64];
-            snprintf(string, sizeof(string), "(config-%s)", config_desc);
-            cli_set_modestring(cli, string);
-        }
-        else
-        {
-            cli_set_modestring(cli, "(config)");
-        }
-
-        cli_build_shortest(cli, cli->commands);
+        // Not config mode
+        cli_set_modestring(cli, NULL);
+    }
+    else if (config_desc && *config_desc)
+    {
+        char string[64];
+        snprintf(string, sizeof(string), "(config-%s)", config_desc);
+        cli_set_modestring(cli, string);
+    }
+    else
+    {
+        cli_set_modestring(cli, "(config)");
     }
 
+    cli_build_shortest(cli, cli->commands);
     return old;
 }
 
@@ -1055,7 +1051,16 @@ static int cli_find_command(struct cli_def *cli, struct cli_command *commands, i
     }
 
     if (start_word == 0)
-        cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", words[start_word]);
+    {
+        if (cli->cli_invalid_command_cb)
+        {
+            return cli->cli_invalid_command_cb(cli, words[0], words + 1, num_words - 1);
+        }
+        else
+        {
+            cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", words[start_word]);
+        }
+    }
 
     return CLI_ERROR_ARG;
 }
@@ -2659,4 +2664,9 @@ void cli_register_configmode_cb(struct cli_def *cli, int (*callback)(struct cli_
 void cli_register_completions_help_cb(struct cli_def *cli, void (*callback)(struct cli_def *, const char *, struct cli_completion* , int))
 {
     cli->completions_help_cb = callback;
+}
+
+void cli_register_invalid_command_cb(struct cli_def *cli, int (*callback)(struct cli_def *, const char *, char **, int))
+{
+    cli->cli_invalid_command_cb = callback;
 }

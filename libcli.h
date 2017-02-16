@@ -84,6 +84,7 @@ struct cli_def {
     void (*request_abort_cb)(struct cli_def *);
     int (*config_mode_callback)(struct cli_def *);
     void (*completions_help_cb)(struct cli_def *, const char *, struct cli_completion*, int);
+    int (*cli_invalid_command_cb)(struct cli_def *, const char *, char **, int);
     void *user_context;
 };
 
@@ -145,6 +146,7 @@ void cli_register_completion_cb(struct cli_command *cmd,
 void cli_register_completion_free(struct cli_def *cli, void (*callback)(struct cli_completion*, int));
 void cli_register_configmode_cb(struct cli_def *cli, int (*callback)(struct cli_def *));
 void cli_register_completions_help_cb(struct cli_def *cli, void (*callback)(struct cli_def *, const char *, struct cli_completion*, int));
+void cli_register_invalid_command_cb(struct cli_def *cli, int (*callback)(struct cli_def *, const char *, char **, int));
 
 // Enable or disable telnet protocol negotiation.
 // Note that this is enabled by default and must be changed before cli_loop() is run.
