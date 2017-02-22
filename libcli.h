@@ -34,6 +34,7 @@ extern "C" {
 #define PRINT_PLAIN             0
 #define PRINT_FILTERED          0x01
 #define PRINT_BUFFERED          0x02
+#define PRINT_ERROR             0x04
 
 #define CLI_MAX_LINE_LENGTH     4096
 #define CLI_MAX_LINE_WORDS      128
@@ -62,7 +63,7 @@ struct cli_def {
     int mode;
     int state;
     struct cli_filter *filters;
-    void (*print_callback)(struct cli_def *cli, const char *string);
+    void (*print_callback)(struct cli_def *cli, int print_mode, const char *string);
     int client;
     /* internal buffers */
     void *conn;
@@ -135,7 +136,7 @@ void cli_bufprint(struct cli_def *cli, const char *format, ...) __attribute__((f
 void cli_vabufprint(struct cli_def *cli, const char *format, va_list ap);
 void cli_plain(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
 void cli_error(struct cli_def *cli, const char *format, ...) __attribute__((format (printf, 2, 3)));
-void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, const char *));
+void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, int print_mode, const char *));
 void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));

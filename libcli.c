@@ -2252,9 +2252,14 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
         if (print)
         {
             if (cli->print_callback)
-                cli->print_callback(cli, p);
+                cli->print_callback(cli, print_mode, p);
             else if (cli->client)
             {
+                if (print_mode & PRINT_ERROR)
+                {
+                    // Always send an alert character with error messages
+                    if (_write(cli->client, "\a", 1) != 1) return;
+                }
                 if (_write(cli->client,p,strlen(p)) != (ssize_t)strlen(p)) return;
                 if (_write(cli->client, "\r\n",2) != 2) return;
             }
@@ -2305,15 +2310,11 @@ void cli_plain(struct cli_def *cli, const char *format, ...)
 
 void cli_error(struct cli_def *cli, const char *format, ...)
 {
-    // Always send an alert character with error messages
-    if (cli && (_write(cli->client, "\a", 1) == 1))
-    {
-        va_list ap;
+    va_list ap;
 
-        va_start(ap, format);
-        _print(cli, PRINT_PLAIN, format, ap);
-        va_end(ap);
-    }
+    va_start(ap, format);
+    _print(cli, PRINT_PLAIN | PRINT_ERROR, format, ap);
+    va_end(ap);
 }
 
 struct cli_match_filter_state
@@ -2564,7 +2565,7 @@ int cli_count_filter(struct cli_def *cli, const char *string, void *data)
     return CLI_ERROR; // no output
 }
 
-void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, const char *))
+void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, int print_mode, const char *))
 {
     cli->print_callback = callback;
 }
