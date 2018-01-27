@@ -1993,10 +1993,16 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
 
         if ((unsigned)n >= cli->buf_size)
         {
+            char *newbuf;
             cli->buf_size = n + 1;
-            cli->buffer = realloc(cli->buffer, cli->buf_size);
-            if (!cli->buffer)
+            newbuf = (char*)realloc(cli->buffer, cli->buf_size);
+            if (!newbuf)
+            {
+                free(cli->buffer);
+                cli->buffer = NULL;
                 return;
+            }
+            cli->buffer = newbuf;
             va_end(ap);
             va_copy(ap, aq);
             continue;
