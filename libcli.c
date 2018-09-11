@@ -1495,16 +1495,25 @@ int cli_loop(struct cli_def *cli, int sockfd)
                         else
                         {
                             int i;
-                            cursor--;
+
                             if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
                             {
-                                for (i = cursor; i <= l; i++) cmd[i] = cmd[i+1];
+                                // back up one space, then write current buffer followed by a space
                                 _write(sockfd, "\b", 1);
-                                _write(sockfd, cmd + cursor, strlen(cmd + cursor));
+                                _write(sockfd, cmd+cursor, l-cursor);
                                 _write(sockfd, " ", 1);
-                                for (i = 0; i <= (int)strlen(cmd + cursor); i++)
-                                    _write(sockfd, "\b", 1);
+                                
+                                // move everything one char left
+                                memmove(cmd+cursor-1, cmd+cursor, l-cursor);
+                                
+                                //set former last char to null
+                                cmd[l-1]=0;
+                                
+                                // and reposition cursor
+                                for (i=l; i>= cursor; i--) _write(sockfd, "\b",1);
+                                
                             }
+                            cursor--;
                         }
                         l--;
                     }
