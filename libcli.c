@@ -379,13 +379,20 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     c->callback = callback;
     c->next = NULL;
     if (!(c->command = strdup(command)))
-        return NULL;
+    {
+        free(c);
+	return NULL;
+    }
+    
     c->parent = parent;
     c->privilege = privilege;
     c->mode = mode;
     if (help && !(c->help = strdup(help)))
-        return NULL;
-
+    {    free(c->command);
+	free(c);
+	return NULL;
+    }
+    
     if (parent)
     {
         if (!parent->children)
@@ -1209,7 +1216,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
     cli->client->_file = sockfd;
 #else
     if (!(cli->client = fdopen(sockfd, "w+")))
-        return CLI_ERROR;
+    {
+        free(cmd);
+	return CLI_ERROR;
+    }
 #endif
 
     setbuf(cli->client, NULL);
