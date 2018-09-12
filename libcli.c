@@ -47,8 +47,12 @@ int write(int fd, const void *buf, unsigned int count) {
 
 int vasprintf(char **strp, const char *fmt, va_list args) {
     int size;
-
-    size = vsnprintf(NULL, 0, fmt, args);
+    va_list argCopy; 
+    
+    // do initial vsnprintf on a copy of the va_list
+    va_copy(argCopy, args);
+    size = vsnprintf(NULL, 0, fmt, argCopy);
+    va_end(argCopy);
     if ((*strp = malloc(size + 1)) == NULL) {
         return -1;
     }
@@ -1979,37 +1983,16 @@ int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode)
 
 static void _print(struct cli_def *cli, int print_mode, const char *format, va_list ap)
 {
-    va_list aq;
     int n;
-    char *p;
+    char *p=NULL;
 
     if (!cli) return; // sanity check
 
-    while (1)
-    {
-        va_copy(aq, ap);
-        if ((n = vsnprintf(cli->buffer, cli->buf_size, format, ap)) == -1)
-            return;
-
-        if ((unsigned)n >= cli->buf_size)
-        {
-            char *newbuf;
-            cli->buf_size = n + 1;
-            newbuf = (char*)realloc(cli->buffer, cli->buf_size);
-            if (!newbuf)
-            {
-                free(cli->buffer);
-                cli->buffer = NULL;
-                return;
-            }
-            cli->buffer = newbuf;
-            va_end(ap);
-            va_copy(ap, aq);
-            continue;
-        }
-        break;
-    }
-
+    n = vasprintf(&p, format, ap);
+    if (n<0) return;
+    if (cli->buffer) free(cli->buffer);
+    cli->buffer = p;
+    cli->buf_size = n;
 
     p = cli->buffer;
     do
