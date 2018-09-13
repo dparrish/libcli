@@ -161,10 +161,16 @@ static ssize_t _write(int fd, const void *buf, size_t count)
 }
 char *cli_command_name(struct cli_def *cli, struct cli_command *command)
 {
-    char *name = cli->commandname;
+    char *name;
     char *o;
 
-    if (name) free(name);
+    if (cli->commandname)
+    {
+      free(cli->commandname);
+      cli->commandname=NULL;
+    }
+    name=cli->commandname;
+
     if (!(name = calloc(1, 1)))
         return NULL;
 
