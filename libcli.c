@@ -47,8 +47,12 @@ int write(int fd, const void *buf, unsigned int count) {
 
 int vasprintf(char **strp, const char *fmt, va_list args) {
     int size;
-
-    size = vsnprintf(NULL, 0, fmt, args);
+    va_list argCopy; 
+    
+    // do initial vsnprintf on a copy of the va_list
+    va_copy(argCopy, args);
+    size = vsnprintf(NULL, 0, fmt, argCopy);
+    va_end(argCopy);
     if ((*strp = malloc(size + 1)) == NULL) {
         return -1;
     }
@@ -161,10 +165,16 @@ static ssize_t _write(int fd, const void *buf, size_t count)
 }
 char *cli_command_name(struct cli_def *cli, struct cli_command *command)
 {
-    char *name = cli->commandname;
+    char *name;
     char *o;
 
-    if (name) free(name);
+    if (cli->commandname)
+    {
+      free(cli->commandname);
+      cli->commandname=NULL;
+    }
+    name=cli->commandname;
+
     if (!(name = calloc(1, 1)))
         return NULL;
 
@@ -379,13 +389,20 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     c->callback = callback;
     c->next = NULL;
     if (!(c->command = strdup(command)))
-        return NULL;
+    {
+        free(c);
+	return NULL;
+    }
+    
     c->parent = parent;
     c->privilege = privilege;
     c->mode = mode;
     if (help && !(c->help = strdup(help)))
-        return NULL;
-
+    {    free(c->command);
+	free(c);
+	return NULL;
+    }
+    
     if (parent)
     {
         if (!parent->children)
@@ -623,9 +640,9 @@ void cli_unregister_all(struct cli_def *cli, struct cli_command *command)
 
 int cli_done(struct cli_def *cli)
 {
+    if (!cli) return CLI_OK;
     struct unp *u = cli->users, *n;
 
-    if (!cli) return CLI_OK;
     cli_free_history(cli);
 
     // Free all users
@@ -1182,7 +1199,7 @@ int cli_loop(struct cli_def *cli, int sockfd)
 {
     unsigned char c;
     int n, l, oldl = 0, is_telnet_option = 0, skip = 0, esc = 0;
-    int cursor = 0, insertmode = 1;
+    int cursor = 0;
     char *cmd = NULL, *oldcmd = 0;
     char *username = NULL, *password = NULL;
 
@@ -1212,7 +1229,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
     cli->client->_file = sockfd;
 #else
     if (!(cli->client = fdopen(sockfd, "w+")))
-        return CLI_ERROR;
+    {
+        free(cmd);
+	return CLI_ERROR;
+    }
 #endif
 
     setbuf(cli->client, NULL);
@@ -1498,16 +1518,25 @@ int cli_loop(struct cli_def *cli, int sockfd)
                         else
                         {
                             int i;
-                            cursor--;
+
                             if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD)
                             {
-                                for (i = cursor; i <= l; i++) cmd[i] = cmd[i+1];
+                                // back up one space, then write current buffer followed by a space
                                 _write(sockfd, "\b", 1);
-                                _write(sockfd, cmd + cursor, strlen(cmd + cursor));
+                                _write(sockfd, cmd+cursor, l-cursor);
                                 _write(sockfd, " ", 1);
-                                for (i = 0; i <= (int)strlen(cmd + cursor); i++)
-                                    _write(sockfd, "\b", 1);
+                                
+                                // move everything one char left
+                                memmove(cmd+cursor-1, cmd+cursor, l-cursor);
+                                
+                                //set former last char to null
+                                cmd[l-1]=0;
+                                
+                                // and reposition cursor
+                                for (i=l; i>= cursor; i--) _write(sockfd, "\b",1);
+                                
                             }
+                            cursor--;
                         }
                         l--;
                     }
@@ -1773,15 +1802,17 @@ int cli_loop(struct cli_def *cli, int sockfd)
             /* normal character typed */
             if (cursor == l)
             {
-                 /* append to end of line */
-                cmd[cursor] = c;
+                 /* append to end of line if not at end-of-buffer */
                 if (l < CLI_MAX_LINE_LENGTH - 1)
                 {
+                    cmd[cursor] = c;
                     l++;
                     cursor++;
                 }
                 else
                 {
+		    // end-of-buffer, ensure null terminated
+                    cmd[cursor] = 0;
                     _write(sockfd, "\a", 1);
                     continue;
                 }
@@ -1789,25 +1820,29 @@ int cli_loop(struct cli_def *cli, int sockfd)
             else
             {
                 // Middle of text
-                if (insertmode)
-                {
-                    int i;
-                    // Move everything one character to the right
-                    if (l >= CLI_MAX_LINE_LENGTH - 2) l--;
-                    for (i = l; i >= cursor; i--)
-                        cmd[i + 1] = cmd[i];
-                    // Write what we've just added
-                    cmd[cursor] = c;
+                int i;
+                // Move everything one character to the right
+                memmove(cmd+cursor+1, cmd+cursor, l-cursor);
 
-                    _write(sockfd, &cmd[cursor], l - cursor + 1);
-                    for (i = 0; i < (l - cursor + 1); i++)
-                        _write(sockfd, "\b", 1);
-                    l++;
+                // Insert new character
+                cmd[cursor] = c;
+
+                // IMPORTANT - if at end of buffer, set last char to NULL and don't change length
+                // otherwise bump length by 1
+                if (l == CLI_MAX_LINE_LENGTH-1 ) 
+                {
+                    cmd[l]=0;
                 }
                 else
-                {
-                    cmd[cursor] = c;
+                { 
+                  l++;
                 }
+                    
+                // write buffer, then backspace to where we were
+                _write(sockfd, cmd+cursor, l-cursor);
+
+                for (i = 0; i < (l - cursor ); i++)
+                    _write(sockfd, "\b", 1);
                 cursor++;
             }
 
@@ -1982,37 +2017,16 @@ int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode)
 
 static void _print(struct cli_def *cli, int print_mode, const char *format, va_list ap)
 {
-    va_list aq;
     int n;
-    char *p;
+    char *p=NULL;
 
     if (!cli) return; // sanity check
 
-    while (1)
-    {
-        va_copy(aq, ap);
-        if ((n = vsnprintf(cli->buffer, cli->buf_size, format, ap)) == -1)
-            return;
-
-        if ((unsigned)n >= cli->buf_size)
-        {
-            char *newbuf;
-            cli->buf_size = n + 1;
-            newbuf = (char*)realloc(cli->buffer, cli->buf_size);
-            if (!newbuf)
-            {
-                free(cli->buffer);
-                cli->buffer = NULL;
-                return;
-            }
-            cli->buffer = newbuf;
-            va_end(ap);
-            va_copy(ap, aq);
-            continue;
-        }
-        break;
-    }
-
+    n = vasprintf(&p, format, ap);
+    if (n<0) return;
+    if (cli->buffer) free(cli->buffer);
+    cli->buffer = p;
+    cli->buf_size = n;
 
     p = cli->buffer;
     do
