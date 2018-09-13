@@ -55,7 +55,7 @@ $(LIB_STATIC): libcli.o
 libcli.o: libcli.h
 
 clitest: clitest.o $(LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< -L. -lcli
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< libcli.c -lcrypt
 
 clitest.exe: clitest.c libcli.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< libcli.o -lws2_32

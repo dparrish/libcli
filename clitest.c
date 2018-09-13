@@ -98,7 +98,7 @@ int cmd_set(struct cli_def *cli, UNUSED(const char *command), char *argv[],
     if (strcmp(argv[0], "regular_interval") == 0)
     {
         unsigned int sec = 0;
-        if (!argv[1] && !&argv[1])
+        if (!argv[1] && !*argv[1])
         {
             cli_print(cli, "Specify a regular callback interval in seconds");
             return CLI_OK;
@@ -288,7 +288,11 @@ int main()
         perror("socket");
         return 1;
     }
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    
+    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)))
+    { 
+        perror("setsockopt");
+    }
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
