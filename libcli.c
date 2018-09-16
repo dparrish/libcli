@@ -379,12 +379,20 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     c->callback = callback;
     c->next = NULL;
     if (!(c->command = strdup(command)))
+    {
+        free(c);
         return NULL;
+    }
+
     c->parent = parent;
     c->privilege = privilege;
     c->mode = mode;
     if (help && !(c->help = strdup(help)))
+    {
+        free(c->command);
+        free(c);
         return NULL;
+    }
 
     if (parent)
     {
@@ -1108,15 +1116,15 @@ static void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
     // Backspace to beginning
     memset((char*)cmd, '\b', cursor);
     _write(sockfd, cmd, cursor);
-    
+
     // overwrite existing cmd with spaces
     memset((char*)cmd, ' ', l);
     _write(sockfd, cmd, l);
-    
+
     // and backspace again to beginning
     memset((char*)cmd, '\b', l);
     _write(sockfd, cmd, l);
-    
+
     // null cmd buffer
     memset((char *)cmd, 0, l);
 
@@ -1211,7 +1219,10 @@ int cli_loop(struct cli_def *cli, int sockfd)
     cli->client->_file = sockfd;
 #else
     if (!(cli->client = fdopen(sockfd, "w+")))
+    {
+        free(cmd);
         return CLI_ERROR;
+    }
 #endif
 
     setbuf(cli->client, NULL);
@@ -1503,16 +1514,16 @@ int cli_loop(struct cli_def *cli, int sockfd)
                                 _write(sockfd, "\b", 1);
                                 _write(sockfd, cmd + cursor, l - cursor);
                                 _write(sockfd, " ", 1);
-                                
+
                                 // move everything one char left
                                 memmove(cmd + cursor - 1, cmd + cursor, l - cursor);
-                                
+
                                 //set former last char to null
                                 cmd[l - 1] = 0;
-                                
+
                                 // and reposition cursor
                                 for (i = l; i >= cursor; i--) _write(sockfd, "\b", 1);
-                                
+
                             }
                             cursor--;
                         }
@@ -1807,15 +1818,15 @@ int cli_loop(struct cli_def *cli, int sockfd)
 
                 // IMPORTANT - if at end of buffer, set last char to NULL and don't change length
                 // otherwise bump length by 1
-                if (l == CLI_MAX_LINE_LENGTH-1 ) 
+                if (l == CLI_MAX_LINE_LENGTH-1 )
                 {
                     cmd[l] = 0;
                 }
                 else
-                { 
+                {
                     l++;
                 }
-                    
+
                 // Write buffer, then backspace to where we were
                 _write(sockfd, cmd + cursor, l - cursor);
 
