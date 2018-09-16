@@ -1181,8 +1181,7 @@ static int show_prompt(struct cli_def *cli, int sockfd)
 int cli_loop(struct cli_def *cli, int sockfd)
 {
     unsigned char c;
-    int n, l, oldl = 0, is_telnet_option = 0, skip = 0, esc = 0;
-    int cursor = 0, insertmode = 1;
+    int n, l, oldl = 0, is_telnet_option = 0, skip = 0, esc = 0, cursor = 0;
     char *cmd = NULL, *oldcmd = 0;
     char *username = NULL, *password = NULL;
 
@@ -1799,25 +1798,29 @@ int cli_loop(struct cli_def *cli, int sockfd)
             else
             {
                 // Middle of text
-                if (insertmode)
-                {
-                    int i;
-                    // Move everything one character to the right
-                    if (l >= CLI_MAX_LINE_LENGTH - 2) l--;
-                    for (i = l; i >= cursor; i--)
-                        cmd[i + 1] = cmd[i];
-                    // Write what we've just added
-                    cmd[cursor] = c;
+                int i;
+                // Move everything one character to the right
+                memmove(cmd+cursor+1, cmd+cursor, l-cursor);
 
-                    _write(sockfd, &cmd[cursor], l - cursor + 1);
-                    for (i = 0; i < (l - cursor + 1); i++)
-                        _write(sockfd, "\b", 1);
-                    l++;
+                // Insert new character
+                cmd[cursor] = c;
+
+                // IMPORTANT - if at end of buffer, set last char to NULL and don't change length
+                // otherwise bump length by 1
+                if (l == CLI_MAX_LINE_LENGTH-1 ) 
+                {
+                    cmd[l] = 0;
                 }
                 else
-                {
-                    cmd[cursor] = c;
+                { 
+                    l++;
                 }
+                    
+                // Write buffer, then backspace to where we were
+                _write(sockfd, cmd + cursor, l - cursor);
+
+                for (i = 0; i < (l - cursor ); i++)
+                    _write(sockfd, "\b", 1);
                 cursor++;
             }
 
