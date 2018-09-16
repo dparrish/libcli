@@ -1770,15 +1770,17 @@ int cli_loop(struct cli_def *cli, int sockfd)
             /* normal character typed */
             if (cursor == l)
             {
-                 /* append to end of line */
-                cmd[cursor] = c;
+                /* append to end of line if not at end-of-buffer */
                 if (l < CLI_MAX_LINE_LENGTH - 1)
                 {
+                    cmd[cursor] = c;
                     l++;
                     cursor++;
                 }
                 else
                 {
+                    // end-of-buffer, ensure null terminated
+                    cmd[cursor] = 0;
                     _write(sockfd, "\a", 1);
                     continue;
                 }
