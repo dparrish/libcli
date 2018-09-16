@@ -1104,21 +1104,24 @@ out:
 
 static void cli_clear_line(int sockfd, char *cmd, int l, int cursor)
 {
-    int i;
-    if (cursor < l)
-    {
-        for (i = 0; i < (l - cursor); i++)
-            _write(sockfd, " ", 1);
-    }
-    for (i = 0; i < l; i++)
-        cmd[i] = '\b';
-    for (; i < l * 2; i++)
-        cmd[i] = ' ';
-    for (; i < l * 3; i++)
-        cmd[i] = '\b';
-    _write(sockfd, cmd, i);
-    memset((char *)cmd, 0, i);
-    l = cursor = 0;
+    // use cmd as our buffer, and overwrite contents as needed
+    // Backspace to beginning
+    memset((char*)cmd, '\b', cursor);
+    _write(sockfd, cmd, cursor);
+    
+    // overwrite existing cmd with spaces
+    memset((char*)cmd, ' ', l);
+    _write(sockfd, cmd, l);
+    
+    // and backspace again to beginning
+    memset((char*)cmd, '\b', l);
+    _write(sockfd, cmd, l);
+    
+    // null cmd buffer
+    memset((char *)cmd, 0, l);
+
+    // reset pointers to beginning
+    cursor = l = 0;
 }
 
 void cli_reprompt(struct cli_def *cli)
