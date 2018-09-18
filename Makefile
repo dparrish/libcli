@@ -82,4 +82,4 @@ rpm:
 	cp -R libcli.{c,h} libcli.spec clitest.c Makefile COPYING README libcli-$(MAJOR).$(MINOR).$(REVISION)
 	tar zcvf libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --exclude CVS --exclude *.tar.gz libcli-$(MAJOR).$(MINOR).$(REVISION)
 	rm -rf libcli-$(MAJOR).$(MINOR).$(REVISION)
-	rpmbuild -ta libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --clean
+	rpmbuild -ta libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --define "debug_package %{nil}" --clean
