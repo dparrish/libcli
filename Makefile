@@ -61,7 +61,7 @@ clitest.exe: clitest.c libcli.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< libcli.o -lws2_32
 
 clean:
-	rm -f *.o $(LIB)* $(LIB_STATIC) clitest
+	rm -f *.o $(LIB)* $(LIB_STATIC) clitest libcli-$(MAJOR).$(MINOR).$(REVISION)
 
 install: $(TARGET_LIBS)
 	install -d $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib
@@ -77,8 +77,9 @@ install: $(TARGET_LIBS)
   endif
 
 rpm:
+	rm -rf libcli-$(MAJOR).$(MINOR).$(REVISION)
 	mkdir libcli-$(MAJOR).$(MINOR).$(REVISION)
-	cp -R *.c *.h Makefile Doc README *.spec libcli-$(MAJOR).$(MINOR).$(REVISION)
+	cp -R libcli.{c,h} libcli.spec clitest.c Makefile COPYING README libcli-$(MAJOR).$(MINOR).$(REVISION)
 	tar zcvf libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --exclude CVS --exclude *.tar.gz libcli-$(MAJOR).$(MINOR).$(REVISION)
 	rm -rf libcli-$(MAJOR).$(MINOR).$(REVISION)
-	rpm -ta libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --clean
+	rpmbuild -ta libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --clean
