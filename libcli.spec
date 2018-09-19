@@ -67,6 +67,9 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Sep 19 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-4
+- Update spac file to use relative links for libcli.so symlinks 
+- Tweak clean target in Makefile
 * Tue Sep 18 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-3
 - Update spec file similar to EPEL's for regular and devel pacakges
 - Update Makefile rpm target to build both regular and devel pacakges

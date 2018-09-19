@@ -61,7 +61,7 @@ clitest.exe: clitest.c libcli.o
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< libcli.o -lws2_32
 
 clean:
-	rm -f *.o $(LIB)* $(LIB_STATIC) clitest libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz
+	rm -f *.o $(LIB)* $(LIB_STATIC) clitest libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz libcli-$(MAJOR).$(MINOR).$(REVISION)
 
 install: $(TARGET_LIBS)
 	install -d $(DESTDIR)$(PREFIX)/include $(DESTDIR)$(PREFIX)/lib
