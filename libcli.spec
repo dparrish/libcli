@@ -42,8 +42,10 @@ install -p -m 644 libcli*.h %{buildroot}%{_includedir}/
 install -d -p %{buildroot}%{_libdir}
 install -p -m 755 libcli.so.%{version} %{buildroot}%{_libdir}/
 install -p -m 755 libcli.a %{buildroot}%{_libdir}/
-ln -s %{_libdir}/libcli.so.%{version} %{buildroot}%{_libdir}/libcli.so.%{verMajMin}
-ln -s %{_libdir}/libcli.so.%{verMajMin} %{buildroot}%{_libdir}/libcli.so
+
+cd %{buildroot}%{_libdir}
+ln -s libcli.so.%{version} libcli.so.%{verMajMin}
+ln -s libcli.so.%{verMajMin} libcli.so
 
 %post -p /sbin/ldconfig
 
