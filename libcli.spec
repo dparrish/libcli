@@ -1,7 +1,7 @@
 Version: 1.9.8
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 1
+Release: 4
 License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
