@@ -1,4 +1,4 @@
-Version: 1.9.7
+Version: 1.9.8
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -8,35 +8,77 @@ Source: %{name}-%{version}.tar.gz
 URL: http://code.google.com/p/libcli
 Packager: David Parrish <david@dparrish.com>
 BuildRoot: %{_tmppath}/%{name}-%{version}-%(%__id -un)
+
+%define verMajMin %(echo %{version} | cut -d '.' -f 1,2)
+
+%package devel
+Summary: Development files for libcli
+Group: Development/Libraries
+Requires: %{name} = %{version}-%{release}
+
 %description
 libcli provides a shared library for including a Cisco-like command-line
 interface into other software. It's a telnet interface which supports
 command-line editing, history, authentication and callbacks for a
 user-definable function tree.
 
+%description devel
+libcli provides a shared library for including a Cisco-like command-line
+interface into other software. It's a telnet interface which supports
+command-line editing, history, authentication and callbacks for a
+user-definable function tree.
+This package contains the devel files.
+
 %prep
-%setup
+%setup -q
 
 %build
 make
 
 %install
 rm -rf $RPM_BUILD_ROOT
-make DESTDIR=$RPM_BUILD_ROOT PREFIX=/usr install
-find $RPM_BUILD_ROOT/usr ! -type d -print | grep -v '\/(README|\.html)$' | \
-    sed "s@^$RPM_BUILD_ROOT@@g" | sed "s/^\(.*\)$/\1\*/" > %{name}-%{version}-filelist
+install -d -p %{buildroot}%{_includedir}
+install -p -m 644 libcli*.h %{buildroot}%{_includedir}/
+install -d -p %{buildroot}%{_libdir}
+install -p -m 755 libcli.so.%{version} %{buildroot}%{_libdir}/
+install -p -m 755 libcli.a %{buildroot}%{_libdir}/
+ln -s %{_libdir}/libcli.so.%{version} %{buildroot}%{_libdir}/libcli.so.%{verMajMin}
+ln -s %{_libdir}/libcli.so.%{verMajMin} %{buildroot}%{_libdir}/libcli.so
 
-%post
-ldconfig
+%post -p /sbin/ldconfig
+
+%postun -p /sbin/ldconfig
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%files -f %{name}-%{version}-filelist
+%files
+%doc COPYING
+%{_libdir}/*\.so.*
+%defattr(-, root, root)
+
+%files devel
+%doc README
+%{_libdir}/*.so*
+%{_libdir}/*.a
+%{_includedir}/*.h
 %defattr(-, root, root)
 
 %changelog
-* Mon Feb  1 2010 David Parrish <david@dparrish.com> 1.9.7-1
+* Tue Sep 18 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-3
+- Update spec file similar to EPEL's for regular and devel pacakges
+- Update Makefile rpm target to build both regular and devel pacakges
+- Update changelog for new fixes)
+- Update changelog (fix dates on several commits to avoid rpmbuild complaint)
+
+* Sun Sep 16 2018 David Parrish <david@parrish.com> 1.9.8-2
+- Reformat patches with clang-format
+
+* Thu Sep 13 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-1
+- Fix segfaults processing long lines in cli_loop()
+- Fix Coverity identified issues at the 'low' aggressive level
+
+* Sun Jul 22 2012 David Parrish <david@dparrish.com> 1.9.7-1
 - Fix memory leak in cli_get_completions - fengxj325@gmail.com
 
 * Tue Jun  5 2012 Teemu Karimerto <teemu.karimerto@steo.fi> 1.9.6-1
@@ -55,13 +97,13 @@ rm -rf $RPM_BUILD_ROOT
 - Migrate development to Google Code
 - Remove docs as they were out of date and now migrated to Google Code wiki
 
-* Fri Jul 28 2008 David Parrish <david@dparrish.com> 1.9.3-1
+* Sun Jul 27 2008 David Parrish <david@dparrish.com> 1.9.3-1
 - Add support for compiling on WIN32 (Thanks Hamish Coleman)
 - Fix cli_build_shortest() length handling
 - Don't call cli_build_shortest() when registering every command
 - Disable TAB completion during username entry
 
-* Fri Jun  2 2008 David Parrish <david@dparrish.com> 1.9.2-1
+* Fri May  2 2008 David Parrish <david@dparrish.com> 1.9.2-1
 - Add configurable timeout for cli_regular() - defaults to 1 second
 - Add idle timeout support
 
@@ -77,10 +119,10 @@ rm -rf $RPM_BUILD_ROOT
 - Many code cleanups and optimisations
 - Fix memory leak calling cli_loop() repeatedly - Thanks Qiang Wu
 
-* Mon Jan 19 2007 David Parrish <david@dparrish.com> 1.8.8-1
+* Sun Feb 18 2007 David Parrish <david@dparrish.com> 1.8.8-1
 - Fix broken auth_callback logic - Thanks Ben Menchaca
 
-* Sat Jun 17 2006 Brendan O'Dea <bod@optus.net> 1.8.7-1
+* Thu Jun 22 2006 Brendan O'Dea <bod@optus.net> 1.8.7-1
 - Code cleanups.
 - Declare internal functions static.
 - Use private data in cli_def rather than static buffers for do_print
