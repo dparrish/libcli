@@ -9,6 +9,8 @@ URL: http://code.google.com/p/libcli
 Packager: David Parrish <david@dparrish.com>
 BuildRoot: %{_tmppath}/%{name}-%{version}-%(%__id -un)
 
+%define verMajMin %(echo %{version} | cut -d '.' -f 1,2)
+
 %package devel
 Summary: Development files for libcli
 Group: Development/Libraries
@@ -38,10 +40,10 @@ rm -rf $RPM_BUILD_ROOT
 install -d -p %{buildroot}%{_includedir}
 install -p -m 644 libcli*.h %{buildroot}%{_includedir}/
 install -d -p %{buildroot}%{_libdir}
-install -p -m 755 libcli.so.1.9.8 %{buildroot}%{_libdir}/
+install -p -m 755 libcli.so.%{version} %{buildroot}%{_libdir}/
 install -p -m 755 libcli.a %{buildroot}%{_libdir}/
-ln -s %{_libdir}/libcli.so.1.9.8 %{buildroot}%{_libdir}/libcli.so.1.9
-ln -s %{_libdir}/libcli.so.1.9 %{buildroot}%{_libdir}/libcli.so
+ln -s %{_libdir}/libcli.so.%{version} %{buildroot}%{_libdir}/libcli.so.%{verMajMin}
+ln -s %{_libdir}/libcli.so.%{verMajMin} %{buildroot}%{_libdir}/libcli.so
 
 %post -p /sbin/ldconfig
 
@@ -72,7 +74,7 @@ rm -rf $RPM_BUILD_ROOT
 * Sun Sep 16 2018 David Parrish <david@parrish.com> 1.9.8-2
 - Reformat patches with clang-format
 
-* Thu Sep 13 2018 Rob Sanders <rsanders.forcepoint.com> 1.9.8-1
+* Thu Sep 13 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-1
 - Fix segfaults processing long lines in cli_loop()
 - Fix Coverity identified issues at the 'low' aggressive level
 
