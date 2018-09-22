@@ -1,7 +1,7 @@
 Version: 1.9.8
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 1
+Release: 4
 License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -42,8 +42,10 @@ install -p -m 644 libcli*.h %{buildroot}%{_includedir}/
 install -d -p %{buildroot}%{_libdir}
 install -p -m 755 libcli.so.%{version} %{buildroot}%{_libdir}/
 install -p -m 755 libcli.a %{buildroot}%{_libdir}/
-ln -s %{_libdir}/libcli.so.%{version} %{buildroot}%{_libdir}/libcli.so.%{verMajMin}
-ln -s %{_libdir}/libcli.so.%{verMajMin} %{buildroot}%{_libdir}/libcli.so
+
+cd %{buildroot}%{_libdir}
+ln -s libcli.so.%{version} libcli.so.%{verMajMin}
+ln -s libcli.so.%{verMajMin} libcli.so
 
 %post -p /sbin/ldconfig
 
@@ -65,6 +67,9 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Sep 19 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-4
+- Update spac file to use relative links for libcli.so symlinks 
+
 * Tue Sep 18 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-3
 - Update spec file similar to EPEL's for regular and devel pacakges
 - Update Makefile rpm target to build both regular and devel pacakges
