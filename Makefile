@@ -10,8 +10,8 @@ DESTDIR =
 PREFIX = /usr/local
 
 MAJOR = 1
-MINOR = 9
-REVISION = 8
+MINOR = 10
+REVISION = 0
 LIB = libcli.so
 LIB_STATIC = libcli.a
 

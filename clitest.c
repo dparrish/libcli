@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <sys/types.h>
+#include <errno.h>
+#include <limits.h>
 #ifdef WIN32
 #include <windows.h>
 #include <winsock2.h>
@@ -174,22 +176,120 @@ void pc(UNUSED(struct cli_def *cli), const char *string) {
   printf("%s\n", string);
 }
 
-int main() {
+#define MODE_POLYGON_TRIANGLE 20
+#define MODE_POLYGON_RECTANGLE 21
+
+int cmd_perimeter( struct cli_def *cli, const char *command, char *argv[], int argc) {
+  struct cli_optarg_pair *optargs=cli_get_all_found_optargs(cli);
+  int i=1,numSides=0;
+  int perimeter=0;
+  char *shapeName=NULL;
+
+  cli_print(cli, "perimeter callback, with %d args" , argc);
+  for (;optargs;optargs=optargs->next) 
+    cli_print(cli, "%d, %s=%s", i++, optargs->name, optargs->value);
+  
+  shapeName = cli_get_optarg_value(cli, "shape", NULL);
+  if (!shapeName) {
+    cli_error(cli, "No shape name given");
+    return CLI_ERROR;
+  } else if (strcmp(shapeName,"triangle") ==0 ) {
+    numSides=3;
+  } else if (strcmp(shapeName,"rectangle") == 0 ) {
+    numSides=4;
+  } else {
+    cli_error(cli, "Unrecognized shape given");
+    return CLI_ERROR;
+  }
+  for (i=1;i<=numSides;i++) {
+    char sidename[50], *value;
+    int length;
+    snprintf(sidename,50,"side_%d",i);
+    value = cli_get_optarg_value(cli, sidename, NULL);
+    length = strtol(value, NULL,10);
+    perimeter += length;
+  }
+  cli_print(cli, "Perimeter is %d", perimeter);
+  return CLI_OK;
+}
+
+const char *KnownShapes[] = {"rectangle","triangle", NULL};
+
+int shape_completor(struct cli_def *cli, const char *name, const char *word, struct cli_comphelp *comphelp) {
+  const char **shape ;
+  int rc=CLI_OK;
+  printf ("Calling shape_completor given %s" , word);
+  for (shape=KnownShapes; *shape && (rc==CLI_OK);shape++) {
+    if (!word || !strncmp(*shape, word, strlen(word))) {
+      rc=cli_add_comphelp_entry(comphelp, *shape);
+    }
+  }
+  return rc;
+}
+
+int shape_validator(struct cli_def *cli, const char *name, const char *value) {
+  const char **shape;
+  int rc=CLI_ERROR;
+  for (shape=KnownShapes; *shape; shape++) {
+    if (!strcmp(value, *shape)) return CLI_OK;
+  }
+  return rc;
+}
+
+int shape_transient_eval( struct cli_def *cli, const char *name, const char *value) {
+  int rc=CLI_OK;
+  if ( !strcmp(value,"rectangle")) {
+    cli_set_transient_mode(cli, MODE_POLYGON_RECTANGLE);
+    rc=CLI_OK;
+  } else if (!strcmp(value, "triangle")) {
+    cli_set_transient_mode(cli, MODE_POLYGON_TRIANGLE);
+    rc=CLI_OK;
+  } else {
+    cli_error(cli, "unrecognized value for setting %s -> %s" , name, value);
+    rc=CLI_ERROR;
+  }
+  return rc;
+}
+
+const char *KnownColors[] = {"black", "white","gray", "red","blue","green","lightred","lightblue","lightgreen",
+                 "darkred","darkblue","darkgree","lavender", "yellow", NULL};
+
+int color_completor(struct cli_def *cli, const char *name, const char *word, struct cli_comphelp *comphelp) {
+  // Attempt to show matches against the following color strings
+  const char **color ;
+  int rc=CLI_OK;
+  for (color=KnownColors; *color && (rc==CLI_OK);color++) {
+    if (!word || !strncmp(*color, word, strlen(word))) {
+      rc=cli_add_comphelp_entry(comphelp, *color);
+    }
+  }
+  return rc;
+}
+
+int color_validator(struct cli_def *cli, const char *name, const char *value) {
+  const char **color;
+  int rc=CLI_ERROR;
+  for (color=KnownColors; *color; color++) {
+    if (!strcmp(value, *color)) return CLI_OK;
+  }
+  return rc;
+}
+
+int side_length_validator(struct cli_def *cli, const char *name, const char *value) {
+  // Verify 'value' is a positive number
+  long len;
+  char *endptr;
+  int rc = CLI_OK;
+  
+  errno=0;
+  len = strtol (value, &endptr, 10);
+  if ((endptr==value) || (*endptr != '\0') ||  ((errno==ERANGE) && ((len == LONG_MIN) || (len == LONG_MAX))) )return CLI_ERROR;
+  return rc;
+}
+
+void run_child(int x) {
   struct cli_command *c;
   struct cli_def *cli;
-  int s, x;
-  struct sockaddr_in addr;
-  int on = 1;
-
-#ifndef WIN32
-  signal(SIGCHLD, SIG_IGN);
-#endif
-#ifdef WIN32
-  if (!winsock_init()) {
-    printf("Error initialising winsock\n");
-    return 1;
-  }
-#endif
 
   // Prepare a small user context
   char mymessage[] = "I contain user data!";
@@ -203,7 +303,7 @@ int main() {
   cli_telnet_protocol(cli, 1);
   cli_regular(cli, regular_callback);
   cli_regular_interval(cli, 5);                          // Defaults to 1 second
-  cli_set_idle_timeout_callback(cli, 60, idle_timeout);  // 60 second idle timeout
+//  cli_set_idle_timeout_callback(cli, 60, idle_timeout);  // 60 second idle timeout
   cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
@@ -222,6 +322,32 @@ int main() {
   c = cli_register_command(cli, NULL, "debug", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, c, "regular", cmd_debug_regular, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                        "Enable cli_regular() callback debugging");
+
+  // Register some commands/subcommands to demonstrate opt/arg and buildmode operations
+  
+  c=cli_register_command(cli, NULL, "perimeter", cmd_perimeter, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Calculate perimeter of polygon");
+  cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set transparent flag",
+  	NULL, NULL, NULL);
+  cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT|CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Specify shape to calclate perimeter for",
+  	shape_completor, shape_validator, shape_transient_eval);
+  cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
+  	color_completor, color_validator, NULL);
+  cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE, "Specify side 1 length",
+  	NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 1 length",
+  	NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_2", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE, "Specify side 2 length",
+  	NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_2", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 2 length",
+  	NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_3", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE, "Specify side 3 length",
+  	NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_3", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 3 length",
+  	NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_4", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 4 length",
+  	NULL, side_length_validator, NULL);
+	
+  
 
   // Set user context and its command
   cli_set_context(cli, (void *)&myctx);
@@ -242,6 +368,24 @@ int main() {
       fclose(fh);
     }
   }
+  cli_loop(cli,x);
+  cli_done(cli);
+}
+
+int main() {
+  int s, x;
+  struct sockaddr_in addr;
+  int on = 1;
+
+#ifndef WIN32
+  signal(SIGCHLD, SIG_IGN);
+#endif
+#ifdef WIN32
+  if (!winsock_init()) {
+    printf("Error initialising winsock\n");
+    return 1;
+  }
+#endif
 
   if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     perror("socket");
@@ -287,15 +431,14 @@ int main() {
 
     /* child */
     close(s);
-    cli_loop(cli, x);
+    run_child(x);
     exit(0);
 #else
-    cli_loop(cli, x);
+    run_child(x);
     shutdown(x, SD_BOTH);
     close(x);
 #endif
   }
 
-  cli_done(cli);
   return 0;
 }
