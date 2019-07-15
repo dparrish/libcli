@@ -130,6 +130,7 @@ struct cli_filter_cmds {
 // Forward defines of *INTERNAL* library function as static here
 static int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
 static int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
+static int cli_begin_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
 static int cli_count_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
 static int cli_match_filter(struct cli_def *cli, const char *string, void *data);
 static int cli_range_filter(struct cli_def *cli, const char *string, void *data);
@@ -544,7 +545,8 @@ struct cli_def *cli_init() {
 
 
   // and now the built in filters
-  c = cli_register_filter(cli, "begin", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Begin with lines that match");
+  c = cli_register_filter(cli, "begin", cli_begin_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Begin with lines that match");
+  cli_register_optarg(c, "begin_at", CLI_CMD_ARGUMENT|CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Begin with lines that match", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "between", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Between lines that match");
 
@@ -1864,6 +1866,24 @@ struct cli_range_filter_state {
   char *to;
 };
 
+int cli_begin_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt) {
+  struct cli_range_filter_state *state;
+  char *from = strdup(cli_get_optarg_value(cli, "begin_at", NULL));
+  char *to = 0;
+
+  filt->filter = cli_range_filter;
+  filt->data = state = calloc(sizeof(struct cli_range_filter_state), 1);
+  if (state) {
+    state->from = from;
+    state->to = to;
+    return CLI_OK;
+  } else {
+    free_z(from);
+    free_z(to);
+    return CLI_ERROR;
+  }
+}
+
 int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt) {
   struct cli_range_filter_state *state;
   char *from = 0;
@@ -2716,7 +2736,7 @@ int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline
     // in 'buildmode' we only have one pipeline, but we need to recall if we had started with any optargs
 
     if (cli->buildmode) cli->found_optargs = cli->buildmode->found_optargs;
-    
+    else		cli->found_optargs = NULL;
     rc=cli_int_locate_command(cli, (i==0)?first_command:cli->filter_commands, 0, &pipeline->stage[i]);
     
     // and save our found optargs for later use
@@ -3048,7 +3068,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       if (!value && lastchar=='\0') {
         // hit a optional argument that does not have a value with it
         cli_error(cli,"Optional argument %s requires a value", stage->words[w_idx]);
-        stage->error_word = stage->words[w_idx];
+        stage->error_word = stage->words[w_idx];
         stage->status = CLI_MISSING_VALUE;
         return ; 
       }
@@ -3069,7 +3089,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         // need to combine remaining words if the CLI_CMD_REMAINDER_OF_LINE flag it set, then we're done processing
 	int set_value_return = 0;
 	
-	if (oaptr->flags | CLI_CMD_REMAINDER_OF_LINE) {
+/*	if (oaptr->flags & CLI_CMD_REMAINDER_OF_LINE) {
 	  char *combined=NULL;
 	  combined = join_words(stage->num_words-w_idx, stage->words + w_idx);
 	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, combined, 0);
@@ -3077,6 +3097,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
 	} else {
 	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags&CLI_CMD_OPTION_MULTIPLE);
 	}
+*/	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags&CLI_CMD_OPTION_MULTIPLE);
 	if (set_value_return != CLI_OK) {
           cli_error(cli,"%sProblem setting value for command argument %s", lastchar=='\0'?"" : "\n", stage->words[w_idx]);
           cli_reprompt(cli);
