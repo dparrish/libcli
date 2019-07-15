@@ -2232,14 +2232,22 @@ char * cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_af
   char *value=NULL;
   struct cli_optarg_pair *optarg_pair;
   
-  for (optarg_pair = cli->found_optargs; optarg_pair; optarg_pair=optarg_pair->next) {
+  printf("cli_get_optarg_value entry - looking for <%s> after <%p>\n", name, (void*)find_after);
+  for (optarg_pair = cli->found_optargs; !value && optarg_pair; optarg_pair=optarg_pair->next) {
+    printf("  Checking %s with value %s <%p> \n", optarg_pair->name, optarg_pair->value, (void*)optarg_pair->value);
+    
+    // check next entry if this isn't our name
     if (strcasecmp(optarg_pair->name, name)) continue;
-    if (find_after && (optarg_pair->value == find_after)) {
+
+    // did we have a find_after, then ignore anything up until our find_after match
+    if ((find_after )&& (optarg_pair->value == find_after)) {
       find_after=NULL;
       continue;
+    } else if ( !find_after) {
+      value = optarg_pair->value;
     }
-    value = optarg_pair->value;
   }
+  printf("cli_get_optarg_value exit - returning <%s><%p>\n", value, value);
   return value;
 }
 
