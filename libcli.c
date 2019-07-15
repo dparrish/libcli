@@ -2247,7 +2247,7 @@ char * cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_af
       value = optarg_pair->value;
     }
   }
-  printf("cli_get_optarg_value exit - returning <%s><%p>\n", value, value);
+  printf("cli_get_optarg_value exit - returning <%s><%p>\n", name, value);
   return value;
 }
 
@@ -3062,15 +3062,28 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       
     if (!validator || ((*validator)(cli, oaptr->name, value)==CLI_OK)) {
       if (oaptr->flags & CLI_CMD_DO_NOT_RECORD) {
-        // we want completion and validation, but then leave this 'value' to be seen
+        // we want completion and validation, but then leave this 'value' to be seen - used *only* by buildmode
         // as argv[0] with argc=1
         break;
-      } else if (cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags&CLI_CMD_OPTION_MULTIPLE)) {
-        cli_error(cli,"%sProblem setting value for command argument %s", lastchar=='\0'?"" : "\n", stage->words[w_idx]);
-        cli_reprompt(cli);
-        stage->error_word=stage->words[w_idx];
-        stage->status = CLI_ERROR;
-        return;
+      } else {
+        // need to combine remaining words if the CLI_CMD_REMAINDER_OF_LINE flag it set, then we're done processing
+	int set_value_return = 0;
+	
+	if (oaptr->flags | CLI_CMD_REMAINDER_OF_LINE) {
+	  char *combined=NULL;
+	  combined = join_words(stage->num_words-w_idx, stage->words + w_idx);
+	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, combined, 0);
+	  free_z(combined);
+	} else {
+	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags&CLI_CMD_OPTION_MULTIPLE);
+	}
+	if (set_value_return != CLI_OK) {
+          cli_error(cli,"%sProblem setting value for command argument %s", lastchar=='\0'?"" : "\n", stage->words[w_idx]);
+          cli_reprompt(cli);
+          stage->error_word=stage->words[w_idx];
+          stage->status = CLI_ERROR;
+          return;
+        }
       }      
     } else {
       cli_error(cli,"%sProblem parsing command setting %s with value %s", lastchar=='\0'? "": "\n", oaptr->name, stage->words[w_idx]);

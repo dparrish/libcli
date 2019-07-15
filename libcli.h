@@ -125,6 +125,7 @@ enum optarg_flags {     CLI_CMD_OPTIONAL_FLAG     = 1 << 0,
                         CLI_CMD_OPTION_SEEN       = 1 << 5,
                         CLI_CMD_TRANSIENT_MODE    = 1 << 6,
 			CLI_CMD_DO_NOT_RECORD     = 1 << 7,
+			CLI_CMD_REMAINDER_OF_LINE = 1 << 8,
                 };
                 
 
