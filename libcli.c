@@ -3089,7 +3089,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         // need to combine remaining words if the CLI_CMD_REMAINDER_OF_LINE flag it set, then we're done processing
 	int set_value_return = 0;
 	
-/*	if (oaptr->flags & CLI_CMD_REMAINDER_OF_LINE) {
+	if (oaptr->flags & CLI_CMD_REMAINDER_OF_LINE) {
 	  char *combined=NULL;
 	  combined = join_words(stage->num_words-w_idx, stage->words + w_idx);
 	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, combined, 0);
@@ -3097,7 +3097,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
 	} else {
 	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags&CLI_CMD_OPTION_MULTIPLE);
 	}
-*/	  set_value_return = cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags&CLI_CMD_OPTION_MULTIPLE);
+
 	if (set_value_return != CLI_OK) {
           cli_error(cli,"%sProblem setting value for command argument %s", lastchar=='\0'?"" : "\n", stage->words[w_idx]);
           cli_reprompt(cli);
