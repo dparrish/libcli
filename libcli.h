@@ -24,11 +24,11 @@ extern "C" {
 #define CLI_UNRECOGNIZED -5
 #define CLI_MISSING_ARGUMENT -6
 #define CLI_MISSING_VALUE -7
-#define CLI_BUILDMODE_COMMAND_START -8
-#define CLI_BUILDMODE_COMMAND_ERROR -9
-#define CLI_BUILDMODE_COMMAND_EXTEND -10
-#define CLI_BUILDMODE_COMMAND_CANCEL -11
-#define CLI_BUILDMODE_COMMAND_EXIT -12
+#define CLI_BUILDMODE_START -8
+#define CLI_BUILDMODE_ERROR -9
+#define CLI_BUILDMODE_EXTEND -10
+#define CLI_BUILDMODE_CANCEL -11
+#define CLI_BUILDMODE_EXIT -12
 
 #define MAX_HISTORY 256
 
@@ -79,7 +79,6 @@ struct cli_def {
   time_t last_action;
   int telnet_protocol;
   void *user_context;
-  struct cli_command *filter_commands;
   struct cli_optarg_pair *found_optargs;
   int transient_mode;
   struct cli_pipeline *pipeline;
@@ -93,6 +92,7 @@ struct cli_filter {
 };
 
 enum command_types {
+  CLI_ANY_COMMAND,
   CLI_REGULAR_COMMAND,
   CLI_FILTER_COMMAND,
   CLI_BUILDMODE_COMMAND
@@ -174,8 +174,7 @@ struct cli_pipeline {
 };
 
 struct cli_buildmode {
-  struct cli_command *c;
-  struct cli_command *commands;
+  struct cli_command *command;
   struct cli_optarg_pair *found_optargs;
   char *cname;
   int mode;
@@ -241,7 +240,7 @@ struct cli_optarg_pair *cli_get_all_found_optargs(struct cli_def *cli);
 int cli_unregister_optarg(struct cli_command *cmd, const char *name);
 char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_after);
 void cli_unregister_all(struct cli_def *cli, struct cli_command *command);
-void cli_unregister_all_optarg(struct cli_optarg *optarg);
+void cli_unregister_all_optarg(struct cli_command *c);
 
 #ifdef __cplusplus
 }
