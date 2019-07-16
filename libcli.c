@@ -130,9 +130,9 @@ struct cli_filter_cmds {
   } while (0)
 
 // Forward defines of *INTERNAL* library function as static here
+static int cli_search_flags_validator(struct cli_def *cli, const char *word, const char *value);
 static int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
 static int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
-static int cli_begin_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
 static int cli_count_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
 static int cli_match_filter(struct cli_def *cli, const char *string, void *data);
 static int cli_range_filter(struct cli_def *cli, const char *string, void *data);
@@ -547,24 +547,44 @@ struct cli_def *cli_init() {
                        "Configure from the terminal");
 
   // and now the built in filters
-  c = cli_register_filter(cli, "begin", cli_begin_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+  c = cli_register_filter(cli, "begin", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Begin with lines that match");
-  cli_register_optarg(c, "begin_at", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
-                      "Begin with lines that match", NULL, NULL, NULL);
+  cli_register_optarg(c, "range_start", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                      "Begin showing lines that match", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "between", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Between lines that match");
+  cli_register_optarg(c, "range_start", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                      "Begin showing lines that match", NULL, NULL, NULL);
+  cli_register_optarg(c, "range_end", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                      "Stop showing lines that match", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "count", cli_count_filter_init, cli_count_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Count of lines");
+
   c = cli_register_filter(cli, "exclude", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Exclude lines that match");
+  cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
+                      MODE_ANY, "Search pattern", NULL, NULL, NULL);
+
   c = cli_register_filter(cli, "include", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match");
+  cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
+                      MODE_ANY, "Search pattern", NULL, NULL, NULL);
+
   c = cli_register_filter(cli, "grep", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match regex (options: -v, -i, -e)");
+  cli_register_optarg(c, "search_flags", CLI_CMD_HYPHENATED_OPTION, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                      "Search flags (-[ivx]", NULL, cli_search_flags_validator, NULL);
+  cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
+                      MODE_ANY, "Search pattern", NULL, NULL, NULL);
+
   c = cli_register_filter(cli, "egrep", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match extended regex");
+  cli_register_optarg(c, "search_flags", CLI_CMD_HYPHENATED_OPTION, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+                      "Search flags (-[ivx]", NULL, cli_search_flags_validator, NULL);
+  cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
+                      MODE_ANY, "Search pattern", NULL, NULL, NULL);
 
   cli->privilege = cli->mode = -1;
   cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -1757,80 +1777,67 @@ struct cli_match_filter_state {
   } match;
 };
 
+int cli_search_flags_validator(struct cli_def *cli, const char *word, const char *value) {
+  // valid search flags starts with a hyphen, then any number of i,v, or e characters
+
+  if ((*value++ == '-') && (*value) && (strspn(value, "vie") == strlen(value))) return CLI_OK;
+  return CLI_ERROR;
+}
+
 int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt) {
   struct cli_match_filter_state *state;
-  int rflags;
-  int i;
-  char *p;
-
-  if (argc < 2) {
-    if (cli->client) fprintf(cli->client, "Match filter requires an argument\r\n");
-
-    return CLI_ERROR;
-  }
+  char *search_pattern = cli_get_optarg_value(cli, "search_pattern", NULL);
+  char *search_flags = cli_get_optarg_value(cli, "search_flags", NULL);
 
   filt->filter = cli_match_filter;
   filt->data = state = calloc(sizeof(struct cli_match_filter_state), 1);
   if (!state) return CLI_ERROR;
 
-  if (argv[0][0] == 'i' || (argv[0][0] == 'e' && argv[0][1] == 'x'))  // include/exclude
-  {
-    if (argv[0][0] == 'e') state->flags = MATCH_INVERT;
+  if (!strcmp(cli->pipeline->current_stage->words[0], "include")) {
+    state->match.string = strdup(search_pattern);
+  } else if (!strcmp(cli->pipeline->current_stage->words[0], "exclude")) {
+    state->match.string = strdup(search_pattern);
+    state->flags = MATCH_INVERT;
+#ifndef WIN32
+  } else {
+    int rflags = REG_NOSUB;
+    if (!strcmp(cli->pipeline->current_stage->words[0], "grep")) {
+      state->flags = MATCH_REGEX;
+    } else if (!strcmp(cli->pipeline->current_stage->words[0], "egrep")) {
+      state->flags = MATCH_REGEX;
+      rflags |= REG_EXTENDED;
+    }
+    if (search_flags) {
+      char *p = search_flags++;
+      while (*p) {
+        switch (*p++) {
+          case 'v':
+            state->flags |= MATCH_INVERT;
+            break;
 
-    state->match.string = join_words(argc - 1, argv + 1);
-    return CLI_OK;
-  }
+          case 'i':
+            rflags |= REG_ICASE;
+            break;
 
-#ifdef WIN32
-  /*
-   * No regex functions in windows, so return an error
-   */
-  return CLI_ERROR;
-#endif
-
-  state->flags = MATCH_REGEX;
-
-  // grep/egrep
-  rflags = REG_NOSUB;
-  if (argv[0][0] == 'e')  // egrep
-    rflags |= REG_EXTENDED;
-
-  i = 1;
-  while (i < argc - 1 && argv[i][0] == '-' && argv[i][1]) {
-    int last = 0;
-    p = &argv[i][1];
-
-    if (strspn(p, "vie") != strlen(p)) break;
-
-    while (*p) {
-      switch (*p++) {
-        case 'v':
-          state->flags |= MATCH_INVERT;
-          break;
-
-        case 'i':
-          rflags |= REG_ICASE;
-          break;
-
-        case 'e':
-          last++;
-          break;
+          case 'e':  // implies next term is search string, so stop processing flags
+            break;
+        }
       }
     }
-
-    i++;
-    if (last) break;
+    if (regcomp(&state->match.re, search_pattern, rflags)) {
+      if (cli->client) fprintf(cli->client, "Invalid pattern \"%s\"\r\n", search_pattern);
+      return CLI_ERROR;
+    }
   }
-
-  p = join_words(argc - i, argv + i);
-  if ((i = regcomp(&state->match.re, p, rflags))) {
-    if (cli->client) fprintf(cli->client, "Invalid pattern \"%s\"\r\n", p);
-
-    free_z(p);
+#else
+  } else {
+    /*
+     * No regex functions in windows, so return an error
+     */
     return CLI_ERROR;
   }
+#endif
 
-  free_z(p);
   return CLI_OK;
 }
 
@@ -1871,50 +1878,13 @@ struct cli_range_filter_state {
   char *to;
 };
 
-int cli_begin_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt) {
-  struct cli_range_filter_state *state;
-  char *from = strdup(cli_get_optarg_value(cli, "begin_at", NULL));
-  char *to = 0;
-
-  filt->filter = cli_range_filter;
-  filt->data = state = calloc(sizeof(struct cli_range_filter_state), 1);
-  if (state) {
-    state->from = from;
-    state->to = to;
-    return CLI_OK;
-  } else {
-    free_z(from);
-    free_z(to);
-    return CLI_ERROR;
-  }
-}
-
 int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt) {
   struct cli_range_filter_state *state;
-  char *from = 0;
-  char *to = 0;
+  char *from = strdup(cli_get_optarg_value(cli, "range_start", NULL));
+  char *to = strdup(cli_get_optarg_value(cli, "range_end", NULL));
 
-  if (!strncmp(argv[0], "bet", 3))  // between
-  {
-    if (argc < 3) {
-      if (cli->client) fprintf(cli->client, "Between filter requires 2 arguments\r\n");
-
-      return CLI_ERROR;
-    }
-
-    if (!(from = strdup(argv[1]))) return CLI_ERROR;
-    to = join_words(argc - 2, argv + 2);
-  } else  // begin
-  {
-    if (argc < 2) {
-      if (cli->client) fprintf(cli->client, "Begin filter requires an argument\r\n");
-
-      return CLI_ERROR;
-    }
-
-    from = join_words(argc - 1, argv + 1);
-  }
-
+  // Do not have to check from/to since we would not have gotten here if we were
+  // missing a required argument
   filt->filter = cli_range_filter;
   filt->data = state = calloc(sizeof(struct cli_range_filter_state), 1);
   if (state) {
@@ -2719,8 +2689,11 @@ int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline
 
   int i;
   int rc = CLI_OK;
-
   struct cli_command *first_command = NULL;
+
+  if (!pipeline) return CLI_ERROR;
+  cli->pipeline = pipeline;
+
   cli->found_optargs = NULL;
   if (cli->buildmode && cli->buildmode->commands) {
     first_command = cli->buildmode->commands;
@@ -2730,6 +2703,7 @@ int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline
   for (i = 0; i < pipeline->num_stages; i++) {
     // in 'buildmode' we only have one pipeline, but we need to recall if we had started with any optargs
 
+    cli->pipeline->current_stage = &pipeline->stage[i];
     if (cli->buildmode)
       cli->found_optargs = cli->buildmode->found_optargs;
     else
@@ -2745,6 +2719,8 @@ int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline
 
     if (rc != CLI_OK) break;
   }
+  cli->pipeline = NULL;
+
   return rc;
 }
 
@@ -2837,32 +2813,38 @@ int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline)
   int rc = CLI_OK;
   struct cli_filter **filt = &cli->filters;
 
-  if (pipeline) {
-    for (stage_num = 1; stage_num < pipeline->num_stages; stage_num++) {
-      struct cli_pipeline_stage *stage = &pipeline->stage[stage_num];
-      cli->found_optargs = stage->found_optargs;
-      *filt = calloc(sizeof(struct cli_filter), 1);
-      if (*filt) {
-        if ((rc = stage->command->init(cli, stage->num_words, stage->words, *filt) != CLI_OK)) {
-          break;
-        }
-        filt = &(*filt)->next;
+  if (!pipeline) return CLI_ERROR;
+
+  cli->pipeline = pipeline;
+  for (stage_num = 1; stage_num < pipeline->num_stages; stage_num++) {
+    struct cli_pipeline_stage *stage = &pipeline->stage[stage_num];
+    pipeline->current_stage = stage;
+    cli->found_optargs = stage->found_optargs;
+    *filt = calloc(sizeof(struct cli_filter), 1);
+    if (*filt) {
+      if ((rc = stage->command->init(cli, stage->num_words, stage->words, *filt) != CLI_OK)) {
+        break;
       }
-    }
-
-    // Did everything init?  If so, execute, otherwise skip execution
-    if ((rc == CLI_OK) && pipeline->stage[0].command->callback) {
-      struct cli_pipeline_stage *stage = &pipeline->stage[0];
-
-      if (cli->buildmode)
-        cli->found_optargs = cli->buildmode->found_optargs;
-      else
-        cli->found_optargs = pipeline->stage[0].found_optargs;
-      rc = stage->command->callback(cli, cli_command_name(cli, stage->command), stage->words + stage->first_unmatched,
-                                    stage->num_words - stage->first_unmatched);
-      if (cli->buildmode) cli->buildmode->found_optargs = cli->found_optargs;
+      filt = &(*filt)->next;
     }
   }
+  pipeline->current_stage = NULL;
+
+  // Did everything init?  If so, execute, otherwise skip execution
+  if ((rc == CLI_OK) && pipeline->stage[0].command->callback) {
+    struct cli_pipeline_stage *stage = &pipeline->stage[0];
+
+    pipeline->current_stage = &pipeline->stage[0];
+    if (cli->buildmode)
+      cli->found_optargs = cli->buildmode->found_optargs;
+    else
+      cli->found_optargs = pipeline->stage[0].found_optargs;
+    rc = stage->command->callback(cli, cli_command_name(cli, stage->command), stage->words + stage->first_unmatched,
+                                  stage->num_words - stage->first_unmatched);
+    if (cli->buildmode) cli->buildmode->found_optargs = cli->found_optargs;
+    pipeline->current_stage = NULL;
+  }
+
   // Now teardown any filters
   while (cli->filters) {
     struct cli_filter *filt = cli->filters;
@@ -2871,6 +2853,7 @@ int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline)
     free_z(filt);
   }
   cli->found_optargs = NULL;
+  cli->pipeline = NULL;
   return rc;
 }
 
@@ -2903,6 +2886,9 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
       delim_end = DELIM_OPT_END;
       get_completions = NULL;  // no point, completor of field is the name itself
     }
+  } else if (optarg->flags & CLI_CMD_HYPHENATED_OPTION) {
+    delim_start = DELIM_OPT_START;
+    delim_end = DELIM_OPT_END;
   } else if (optarg->flags & CLI_CMD_ARGUMENT) {
     delim_start = DELIM_ARG_START;
     delim_end = DELIM_ARG_END;
@@ -2994,12 +2980,18 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       if (cli->privilege < oaptr->privilege) continue;
       if ((oaptr->mode != cli->mode) && (oaptr->mode != cli->transient_mode) && (oaptr->mode != MODE_ANY)) continue;
 
-      /* An exact match for an optional flag/argument name trumps anything and will be the *only* candidate
+      /* Two special cases - a hphenated option and an 'exact' match optional flag or optional argument
+       * If our word starts with a '-' and we have a CMD_CLI_HYPHENATED_OPTION or an exact match for an
+       * optional flag/argument name trumps anything and will be the *only* candidate
        * Otherwise if the word is 'blank', could be an argument, or matches 'enough' of an option/flag it is a candidate
        * Once we accept an argument as a candidate, we're done looking for candidates as straight arguments are required
        */
       if (stage->words[w_idx] && (oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) &&
           !strcmp(oaptr->name, stage->words[w_idx])) {
+        candidates[0] = oaptr;
+        num_candidates = 1;
+        break;
+      } else if (stage->words[w_idx] && stage->words[w_idx][0] == '-' && (oaptr->flags & (CLI_CMD_HYPHENATED_OPTION))) {
         candidates[0] = oaptr;
         num_candidates = 1;
         break;
@@ -3038,7 +3030,8 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
 
         // need to know *which* word we're trying to complete for optional_args, hence the difference calls
         if (((oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_ARGUMENT)) && (w_idx == (stage->num_words - 1))) ||
-            ((oaptr->flags & CLI_CMD_OPTIONAL_ARGUMENT) && (w_idx == (stage->num_words - 1)))) {
+            ((oaptr->flags & (CLI_CMD_OPTIONAL_ARGUMENT | CLI_CMD_HYPHENATED_OPTION)) &&
+             (w_idx == (stage->num_words - 1)))) {
           cli_get_optarg_comphelp(cli, oaptr, comphelp, num_candidates, lastchar, stage->words[w_idx],
                                   stage->words[w_idx]);
           called_comphelp = 1;
