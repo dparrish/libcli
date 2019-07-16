@@ -565,7 +565,7 @@ struct cli_def *cli_init() {
 
   c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
   cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC,
-                       "Configure from the terminal");
+                       "Conlfigure from the terminal");
 
   // and now the built in filters
   c = cli_register_filter(cli, "begin", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
@@ -2544,7 +2544,7 @@ int cli_int_buildmode_unset_completor(struct cli_def *cli, const char *name, con
 }
 
 int cli_int_buildmode_unset_validator(struct cli_def *cli, const char *name, const char *value) {
-  return CLI_OK
+  return CLI_OK;
 }
 
 void cli_set_transient_mode(struct cli_def *cli, int transient_mode) {
