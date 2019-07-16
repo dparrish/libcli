@@ -92,7 +92,11 @@ struct cli_filter {
   struct cli_filter *next;
 };
 
-enum command_types { CLI_REGULAR_COMMAND, CLI_FILTER_COMMAND, CLI_BUILDMODE_COMMAND };
+enum command_types {
+  CLI_REGULAR_COMMAND,
+  CLI_FILTER_COMMAND,
+  CLI_BUILDMODE_COMMAND
+};
 
 struct cli_command {
   char *command;
@@ -106,10 +110,9 @@ struct cli_command {
   struct cli_command *parent;
   struct cli_optarg *optargs;
   int (*filter)(struct cli_def *cli, const char *string, void *data);
-  int (*init) (struct cli_def *cli, int, char **, struct cli_filter *filt);
+  int (*init)(struct cli_def *cli, int, char **, struct cli_filter *filt);
   int command_type;
 };
-
 
 struct cli_comphelp {
   int comma_separated;
@@ -117,17 +120,17 @@ struct cli_comphelp {
   int num_entries;
 };
 
-enum optarg_flags {     CLI_CMD_OPTIONAL_FLAG     = 1 << 0,
-			            CLI_CMD_OPTIONAL_ARGUMENT = 1 << 1,
-                        CLI_CMD_ARGUMENT          = 1 << 2,
-                        CLI_CMD_ALLOW_BUILDMODE   = 1 << 3,
-                        CLI_CMD_OPTION_MULTIPLE   = 1 << 4,
-                        CLI_CMD_OPTION_SEEN       = 1 << 5,
-                        CLI_CMD_TRANSIENT_MODE    = 1 << 6,
-			CLI_CMD_DO_NOT_RECORD     = 1 << 7,
-			CLI_CMD_REMAINDER_OF_LINE = 1 << 8,
-                };
-                
+enum optarg_flags {
+  CLI_CMD_OPTIONAL_FLAG = 1 << 0,
+  CLI_CMD_OPTIONAL_ARGUMENT = 1 << 1,
+  CLI_CMD_ARGUMENT = 1 << 2,
+  CLI_CMD_ALLOW_BUILDMODE = 1 << 3,
+  CLI_CMD_OPTION_MULTIPLE = 1 << 4,
+  CLI_CMD_OPTION_SEEN = 1 << 5,
+  CLI_CMD_TRANSIENT_MODE = 1 << 6,
+  CLI_CMD_DO_NOT_RECORD = 1 << 7,
+  CLI_CMD_REMAINDER_OF_LINE = 1 << 8,
+};
 
 struct cli_optarg {
   char *name;
@@ -164,7 +167,7 @@ struct cli_pipeline {
   char *cmdline;
   char *words[CLI_MAX_LINE_WORDS];
   int num_words;
-  int num_stages;  
+  int num_stages;
   struct cli_pipeline_stage stage[CLI_MAX_LINE_WORDS];
 };
 
@@ -175,7 +178,7 @@ struct cli_buildmode {
   char *cname;
   int mode;
   int transient_mode;
-  char * mode_text;
+  char *mode_text;
 };
 
 struct cli_def *cli_init();
@@ -222,20 +225,21 @@ void cli_free_comphelp(struct cli_comphelp *comphelp);
 int cli_add_comphelp_entry(struct cli_comphelp *comphelp, const char *entry);
 void cli_set_transient_mode(struct cli_def *cli, int transient_mode);
 struct cli_command *cli_register_filter(struct cli_def *cli, const char *command,
-                                         int(*init) (struct cli_def *cli, int, char **, struct cli_filter *filt),
-                                         int(*filter)(struct cli_def *, const char *, void *),
-                                         int privilege, int mode, const char *help);
+                                        int (*init)(struct cli_def *cli, int, char **, struct cli_filter *filt),
+                                        int (*filter)(struct cli_def *, const char *, void *), int privilege, int mode,
+                                        const char *help);
 int cli_unregister_filter(struct cli_def *cli, const char *command);
-int cli_register_optarg(struct cli_command *cmd, const char *name, int flags, int priviledge, int mode, const char *help, 
-                                        int (*get_completions)(struct cli_def *cli, const char*, const char *, struct cli_comphelp * ),
-                                        int (*validator)(struct cli_def *cli, const char *, const char *),
-                                        int (*transient_mode)(struct cli_def *, const char *, const char *));
-char *cli_find_optarg_value(struct cli_def *cli, char *name, char *find_after) ;
-struct cli_optarg_pair  *cli_get_all_found_optargs(struct cli_def *cli);
+int cli_register_optarg(struct cli_command *cmd, const char *name, int flags, int priviledge, int mode,
+                        const char *help,
+                        int (*get_completions)(struct cli_def *cli, const char *, const char *, struct cli_comphelp *),
+                        int (*validator)(struct cli_def *cli, const char *, const char *),
+                        int (*transient_mode)(struct cli_def *, const char *, const char *));
+char *cli_find_optarg_value(struct cli_def *cli, char *name, char *find_after);
+struct cli_optarg_pair *cli_get_all_found_optargs(struct cli_def *cli);
 int cli_unregister_optarg(struct cli_command *cmd, const char *name);
-char * cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_after);
+char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_after);
 void cli_unregister_all(struct cli_def *cli, struct cli_command *command);
-void cli_unregister_all_optarg(struct cli_optarg *optarg) ;
+void cli_unregister_all_optarg(struct cli_optarg *optarg);
 
 #ifdef __cplusplus
 }

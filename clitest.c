@@ -163,75 +163,69 @@ int regular_callback(struct cli_def *cli) {
   return CLI_OK;
 }
 
-int check_enable(const char *password) {
-  return !strcasecmp(password, "topsecret");
-}
+int check_enable(const char *password) { return !strcasecmp(password, "topsecret"); }
 
 int idle_timeout(struct cli_def *cli) {
   cli_print(cli, "Custom idle timeout");
   return CLI_QUIT;
 }
 
-void pc(UNUSED(struct cli_def *cli), const char *string) {
-  printf("%s\n", string);
-}
+void pc(UNUSED(struct cli_def *cli), const char *string) { printf("%s\n", string); }
 
 #define MODE_POLYGON_TRIANGLE 20
 #define MODE_POLYGON_RECTANGLE 21
 
-int cmd_perimeter( struct cli_def *cli, const char *command, char *argv[], int argc) {
-  struct cli_optarg_pair *optargs=cli_get_all_found_optargs(cli);
-  int i=1,numSides=0;
-  int perimeter=0;
-  int verbose_count=0;
-  char *verboseArg=NULL;
-  char *shapeName=NULL;
+int cmd_perimeter(struct cli_def *cli, const char *command, char *argv[], int argc) {
+  struct cli_optarg_pair *optargs = cli_get_all_found_optargs(cli);
+  int i = 1, numSides = 0;
+  int perimeter = 0;
+  int verbose_count = 0;
+  char *verboseArg = NULL;
+  char *shapeName = NULL;
 
-  cli_print(cli, "perimeter callback, with %d args" , argc);
-  for (;optargs;optargs=optargs->next) 
-    cli_print(cli, "%d, %s=%s", i++, optargs->name, optargs->value);
-  
-  
-  if ((verboseArg=cli_get_optarg_value(cli, "verbose", verboseArg))) {
+  cli_print(cli, "perimeter callback, with %d args", argc);
+  for (; optargs; optargs = optargs->next) cli_print(cli, "%d, %s=%s", i++, optargs->name, optargs->value);
+
+  if ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg))) {
     do {
       verbose_count++;
-    } while ((verboseArg=cli_get_optarg_value(cli, "verbose", verboseArg)));
+    } while ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg)));
   }
   cli_print(cli, "verbose argument was seen  %d times", verbose_count);
-  
+
   shapeName = cli_get_optarg_value(cli, "shape", NULL);
   if (!shapeName) {
     cli_error(cli, "No shape name given");
     return CLI_ERROR;
-  } else if (strcmp(shapeName,"triangle") ==0 ) {
-    numSides=3;
-  } else if (strcmp(shapeName,"rectangle") == 0 ) {
-    numSides=4;
+  } else if (strcmp(shapeName, "triangle") == 0) {
+    numSides = 3;
+  } else if (strcmp(shapeName, "rectangle") == 0) {
+    numSides = 4;
   } else {
     cli_error(cli, "Unrecognized shape given");
     return CLI_ERROR;
   }
-  for (i=1;i<=numSides;i++) {
+  for (i = 1; i <= numSides; i++) {
     char sidename[50], *value;
     int length;
-    snprintf(sidename,50,"side_%d",i);
+    snprintf(sidename, 50, "side_%d", i);
     value = cli_get_optarg_value(cli, sidename, NULL);
-    length = strtol(value, NULL,10);
+    length = strtol(value, NULL, 10);
     perimeter += length;
   }
   cli_print(cli, "Perimeter is %d", perimeter);
   return CLI_OK;
 }
 
-const char *KnownShapes[] = {"rectangle","triangle", NULL};
+const char *KnownShapes[] = {"rectangle", "triangle", NULL};
 
 int shape_completor(struct cli_def *cli, const char *name, const char *value, struct cli_comphelp *comphelp) {
-  const char **shape ;
-  int rc=CLI_OK;
+  const char **shape;
+  int rc = CLI_OK;
   printf("shape_completor called with <%s>\n", value);
-  for (shape=KnownShapes; *shape && (rc==CLI_OK);shape++) {
+  for (shape = KnownShapes; *shape && (rc == CLI_OK); shape++) {
     if (!value || !strncmp(*shape, value, strlen(value))) {
-      rc=cli_add_comphelp_entry(comphelp, *shape);
+      rc = cli_add_comphelp_entry(comphelp, *shape);
     }
   }
   return rc;
@@ -239,47 +233,48 @@ int shape_completor(struct cli_def *cli, const char *name, const char *value, st
 
 int shape_validator(struct cli_def *cli, const char *name, const char *value) {
   const char **shape;
-  int rc=CLI_ERROR;
+  int rc = CLI_ERROR;
   printf("shape_validator called with <%s>\n", value);
-  for (shape=KnownShapes; *shape; shape++) {
+  for (shape = KnownShapes; *shape; shape++) {
     if (!strcmp(value, *shape)) return CLI_OK;
   }
   return rc;
 }
 
 int verbose_validator(struct cli_def *cli, const char *name, const char *value) {
-  int rc=CLI_OK;
-  printf ("verbose_validator called\n");
+  int rc = CLI_OK;
+  printf("verbose_validator called\n");
   return rc;
 }
 
-int shape_transient_eval( struct cli_def *cli, const char *name, const char *value) {
-  int rc=CLI_OK;
+int shape_transient_eval(struct cli_def *cli, const char *name, const char *value) {
+  int rc = CLI_OK;
   printf("shape_transient_eval called with <%s>\n", value);
-  if ( !strcmp(value,"rectangle")) {
+  if (!strcmp(value, "rectangle")) {
     cli_set_transient_mode(cli, MODE_POLYGON_RECTANGLE);
-    rc=CLI_OK;
+    rc = CLI_OK;
   } else if (!strcmp(value, "triangle")) {
     cli_set_transient_mode(cli, MODE_POLYGON_TRIANGLE);
-    rc=CLI_OK;
+    rc = CLI_OK;
   } else {
-    cli_error(cli, "unrecognized value for setting %s -> %s" , name, value);
-    rc=CLI_ERROR;
+    cli_error(cli, "unrecognized value for setting %s -> %s", name, value);
+    rc = CLI_ERROR;
   }
   return rc;
 }
 
-const char *KnownColors[] = {"black", "white","gray", "red","blue","green","lightred","lightblue","lightgreen",
-                 "darkred","darkblue","darkgree","lavender", "yellow", NULL};
+const char *KnownColors[] = {"black",    "white",    "gray",      "red",        "blue",
+                             "green",    "lightred", "lightblue", "lightgreen", "darkred",
+                             "darkblue", "darkgree", "lavender",  "yellow",     NULL};
 
 int color_completor(struct cli_def *cli, const char *name, const char *word, struct cli_comphelp *comphelp) {
   // Attempt to show matches against the following color strings
-  const char **color ;
-  int rc=CLI_OK;
+  const char **color;
+  int rc = CLI_OK;
   printf("color_completor called with <%s>\n", word);
-  for (color=KnownColors; *color && (rc==CLI_OK);color++) {
+  for (color = KnownColors; *color && (rc == CLI_OK); color++) {
     if (!word || !strncmp(*color, word, strlen(word))) {
-      rc=cli_add_comphelp_entry(comphelp, *color);
+      rc = cli_add_comphelp_entry(comphelp, *color);
     }
   }
   return rc;
@@ -287,9 +282,9 @@ int color_completor(struct cli_def *cli, const char *name, const char *word, str
 
 int color_validator(struct cli_def *cli, const char *name, const char *value) {
   const char **color;
-  int rc=CLI_ERROR;
+  int rc = CLI_ERROR;
   printf("color_validator called for %s\n", name);
-  for (color=KnownColors; *color; color++) {
+  for (color = KnownColors; *color; color++) {
     if (!strcmp(value, *color)) return CLI_OK;
   }
   return rc;
@@ -300,11 +295,12 @@ int side_length_validator(struct cli_def *cli, const char *name, const char *val
   long len;
   char *endptr;
   int rc = CLI_OK;
-  
+
   printf("side_length_validator called\n");
-  errno=0;
-  len = strtol (value, &endptr, 10);
-  if ((endptr==value) || (*endptr != '\0') ||  ((errno==ERANGE) && ((len == LONG_MIN) || (len == LONG_MAX))) )return CLI_ERROR;
+  errno = 0;
+  len = strtol(value, &endptr, 10);
+  if ((endptr == value) || (*endptr != '\0') || ((errno == ERANGE) && ((len == LONG_MIN) || (len == LONG_MAX))))
+    return CLI_ERROR;
   return rc;
 }
 
@@ -323,8 +319,8 @@ void run_child(int x) {
   cli_set_hostname(cli, "router");
   cli_telnet_protocol(cli, 1);
   cli_regular(cli, regular_callback);
-  cli_regular_interval(cli, 5);                          // Defaults to 1 second
-//  cli_set_idle_timeout_callback(cli, 60, idle_timeout);  // 60 second idle timeout
+  cli_regular_interval(cli, 5);  // Defaults to 1 second
+                                 //  cli_set_idle_timeout_callback(cli, 60, idle_timeout);  // 60 second idle timeout
   cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
@@ -345,32 +341,32 @@ void run_child(int x) {
                        "Enable cli_regular() callback debugging");
 
   // Register some commands/subcommands to demonstrate opt/arg and buildmode operations
-  
-  c=cli_register_command(cli, NULL, "perimeter", cmd_perimeter, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Calculate perimeter of polygon");
-  cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set transparent flag",
-  	NULL, NULL, NULL);
-  cli_register_optarg(c, "verbose", CLI_CMD_OPTIONAL_FLAG|CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set transparent flag",
-  	NULL, NULL, NULL);
-  cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT|CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Specify shape to calclate perimeter for",
-  	shape_completor, shape_validator, shape_transient_eval);
+
+  c = cli_register_command(cli, NULL, "perimeter", cmd_perimeter, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                           "Calculate perimeter of polygon");
+  cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                      "Set transparent flag", NULL, NULL, NULL);
+  cli_register_optarg(c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                      "Set transparent flag", NULL, NULL, NULL);
+  cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                      "Specify shape to calclate perimeter for", shape_completor, shape_validator,
+                      shape_transient_eval);
   cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
-  	color_completor, color_validator, NULL);
-  cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE, "Specify side 1 length",
-  	NULL, side_length_validator, NULL);
-  cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 1 length",
-  	NULL, side_length_validator, NULL);
-  cli_register_optarg(c, "side_2", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE, "Specify side 2 length",
-  	NULL, side_length_validator, NULL);
-  cli_register_optarg(c, "side_2", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 2 length",
-  	NULL, side_length_validator, NULL);
-  cli_register_optarg(c, "side_3", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE, "Specify side 3 length",
-  	NULL, side_length_validator, NULL);
-  cli_register_optarg(c, "side_3", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 3 length",
-  	NULL, side_length_validator, NULL);
-  cli_register_optarg(c, "side_4", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE, "Specify side 4 length",
-  	NULL, side_length_validator, NULL);
-	
-  
+                      color_completor, color_validator, NULL);
+  cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE,
+                      "Specify side 1 length", NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,
+                      "Specify side 1 length", NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_2", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE,
+                      "Specify side 2 length", NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_2", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,
+                      "Specify side 2 length", NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_3", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE,
+                      "Specify side 3 length", NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_3", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,
+                      "Specify side 3 length", NULL, side_length_validator, NULL);
+  cli_register_optarg(c, "side_4", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,
+                      "Specify side 4 length", NULL, side_length_validator, NULL);
 
   // Set user context and its command
   cli_set_context(cli, (void *)&myctx);
@@ -391,7 +387,7 @@ void run_child(int x) {
       fclose(fh);
     }
   }
-  cli_loop(cli,x);
+  cli_loop(cli, x);
   cli_done(cli);
 }
 
