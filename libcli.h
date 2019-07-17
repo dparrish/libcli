@@ -105,6 +105,7 @@ struct cli_command {
   char *help;
   int privilege;
   int mode;
+  struct cli_command *previous;
   struct cli_command *next;
   struct cli_command *children;
   struct cli_command *parent;
@@ -239,8 +240,9 @@ char *cli_find_optarg_value(struct cli_def *cli, char *name, char *find_after);
 struct cli_optarg_pair *cli_get_all_found_optargs(struct cli_def *cli);
 int cli_unregister_optarg(struct cli_command *cmd, const char *name);
 char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_after);
-void cli_unregister_all(struct cli_def *cli, struct cli_command *command);
 void cli_unregister_all_optarg(struct cli_command *c);
+void cli_unregister_all_filters(struct cli_def *cli);
+void cli_unregister_all_commands(struct cli_def *cli);
 
 #ifdef __cplusplus
 }

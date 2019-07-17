@@ -147,7 +147,7 @@ static int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stag
 static char *cli_int_buildmode_extend_cmdline(char *, char *word);
 static void cli_int_free_buildmode(struct cli_def *cli);
 static int cli_int_add_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple);
-static void cli_free_command(struct cli_command *cmd);
+static void cli_free_command(struct cli_def *cli, struct cli_command *cmd);
 static int cli_int_unregister_command_core(struct cli_def *cli, const char *command, int command_type);
 static int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *command) __attribute__((unused));
 static struct cli_command *cli_int_register_buildmode_command(
@@ -171,7 +171,7 @@ static int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *p
 static int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 static struct cli_pipeline *cli_int_free_pipeline(struct cli_pipeline *pipeline);
-static struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent,
+static void cli_register_command_core(struct cli_def *cli, struct cli_command *parent,
                                                      struct cli_command *c);
 
 static ssize_t _write(int fd, const void *buf, size_t count) {
@@ -361,29 +361,46 @@ int cli_set_configmode(struct cli_def *cli, int mode, const char *config_desc) {
   return old;
 }
 
-struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c) {
-  struct cli_command *p;
+void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c) {
+  struct cli_command *p = NULL;
 
-  if (!c) return NULL;
+  if (!c) return ;
 
+  c->parent = parent;
+  
+  /*
+   * Figure it we have a chain, or would be the first element on it
+   * If we'd be the first element, assign as such.
+   * Otherwise find the lead element
+   * so we can trace it below
+   */
+   
   if (parent) {
     if (!parent->children) {
       parent->children = c;
     } else {
-      for (p = parent->children; p && p->next; p = p->next)
-        ;
-      if (p) p->next = c;
+      p = parent->children;
     }
   } else {
     if (!cli->commands) {
       cli->commands = c;
     } else {
-      for (p = cli->commands; p && p->next; p = p->next)
-        ;
-      if (p) p->next = c;
+      p = cli->commands;
     }
   }
-  return c;
+  
+  /*
+   * If we have a chain (p is not null), run down to the last element
+   * and place this command at the end
+   */
+  for (; p && p->next; p = p->next)
+      ;
+  
+  if (p) {
+    p->next = c;
+    c->previous = p;
+  }
+  return ;
 }
 
 struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command,
@@ -401,7 +418,6 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     return NULL;
   }
 
-  c->parent = parent;
   c->privilege = privilege;
   c->mode = mode;
   if (help && !(c->help = strdup(help))) {
@@ -410,25 +426,53 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     return NULL;
   }
 
-  if (!cli_register_command_core(cli, parent, c)) {
-    cli_free_command(c);
-    c = NULL;
-  }
+  cli_register_command_core(cli, parent, c);
   return c;
 }
 
-static void cli_free_command(struct cli_command *cmd) {
+static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
   struct cli_command *c, *p;
-
+ 
   for (c = cmd->children; c;) {
     p = c->next;
-    cli_free_command(c);
+    cli_free_command(cli, c);
     c = p;
   }
 
   free(cmd->command);
   if (cmd->help) free(cmd->help);
   if (cmd->optargs) cli_unregister_all_optarg(cmd);
+   
+  /*
+   * Ok, update the pointers of anyone who pointed to us.
+   * We have 3 pointers to worry about - parent, previous, and next.
+   * We don't have to worry about children since they've been cleared above.
+   * If both parent *and* previous being null this means that
+   *   cli->command points to us, so we need to only update
+   *   cli->command to point to next.  
+   * Otherwise ensure that any item before/behind us points
+   *   around us.  
+   *
+   * Important - there is no provision for deleting a discrete subcommand.
+   * For example, suppose we define foo, then bar with foo as the parent, then baz with 
+   * bar as the parent.  We cannot delete 'bar' and have a new chain of foo -> baz.
+   * The above freeing of children prevents this in the first place.    
+   */
+   
+  if (!cmd->parent && !cmd->previous) {
+    cli->commands = cmd->next;
+    if (cmd->next) {
+      cmd->next->parent = NULL;
+      cmd->next->previous = NULL;
+    }
+  } else {
+    if (cmd->previous) {
+      cmd->previous->next = cmd->next;
+    } 
+    if (cmd->next) {
+      cmd->next->previous = cmd->previous;
+    }
+  }
   free(cmd);
 }
 
@@ -438,17 +482,13 @@ int cli_int_unregister_command_core(struct cli_def *cli, const char *command, in
   if (!command) return -1;
   if (!cli->commands) return CLI_OK;
 
-  for (c = cli->commands; c; c = c->next) {
+  for (c = cli->commands; c;) {
+    p = c->next;
     if ((strcmp(c->command, command) == 0) && (c->command_type == command_type)) {
-      if (p)
-        p->next = c->next;
-      else
-        cli->commands = c->next;
-
-      cli_free_command(c);
+      cli_free_command(cli, c);
       return CLI_OK;
     }
-    p = c;
+    c = p;
   }
 
   return CLI_OK;
@@ -628,14 +668,9 @@ void cli_unregister_tree(struct cli_def *cli, struct cli_command *command, int c
   for (c = command; c;) {
     p = c->next;
     if ((c->command_type == command_type) || (command_type == CLI_ANY_COMMAND)) {
-      // handle case where we're deleting *first* command
-      if (c == cli->commands) cli->commands = p;
+      if (c == cli->commands) cli->commands = c->next;
       // Unregister all child commands
-      if (c->children) cli_unregister_tree(cli, c->children, command_type);
-      if (c->optargs) cli_unregister_all_optarg(c);
-      if (c->command) free(c->command);
-      if (c->help) free(c->help);
-      free(c);
+      cli_free_command(cli, c);
     }
     c = p;
   }
@@ -2023,11 +2058,9 @@ struct cli_command *cli_register_filter(struct cli_def *cli, const char *command
     free(c);
     return NULL;
   }
+  
   // filters are all registered at the top level
-  if (!cli_register_command_core(cli, NULL, c)) {
-    cli_free_command(c);
-    c = NULL;
-  }
+  cli_register_command_core(cli, NULL, c);
   return c;
 }
 
@@ -2239,7 +2272,7 @@ char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_aft
 
 void cli_int_free_buildmode(struct cli_def *cli) {
   if (!cli || !cli->buildmode) return;
-  //  cli_unregister_tree(cli, cli->commands, CLI_BUILDMODE_COMMAND);
+  cli_unregister_tree(cli, cli->commands, CLI_BUILDMODE_COMMAND);
   cli->mode = cli->buildmode->mode;
   free_z(cli->buildmode->cname);
   free_z(cli->buildmode->mode_text);
@@ -2351,7 +2384,6 @@ struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, stru
   }
 
   c->command_type = CLI_BUILDMODE_COMMAND;
-  c->parent = parent;
   c->privilege = privilege;
   c->mode = mode;
   if (help && !(c->help = strdup(help))) {
@@ -2359,11 +2391,9 @@ struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, stru
     free(c);
     return NULL;
   }
+
   // buildmode commmands are all registered at the top level
-  if (!cli_register_command_core(cli, NULL, c)) {
-    cli_free_command(c);
-    c = NULL;
-  }
+  cli_register_command_core(cli, NULL, c);
   return c;
 }
 
@@ -3139,4 +3169,12 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
     }
   }
   return;
+}
+
+void cli_unregister_all_commands(struct cli_def *cli) {
+  cli_unregister_tree(cli, cli->commands, CLI_REGULAR_COMMAND);
+}
+
+void cli_unregister_all_filters(struct cli_def *cli) {
+  cli_unregister_tree(cli, cli->commands, CLI_FILTER_COMMAND);
 }
