@@ -447,9 +447,8 @@ static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
    * Ok, update the pointers of anyone who pointed to us.
    * We have 3 pointers to worry about - parent, previous, and next.
    * We don't have to worry about children since they've been cleared above.
-   * If both parent *and* previous being null this means that
-   *   cli->command points to us, so we need to only update
-   *   cli->command to point to next.  
+   * If both cli->command points to us we need to update
+   *   cli->command to point to whatever command is 'next'.  
    * Otherwise ensure that any item before/behind us points
    *   around us.  
    *
@@ -459,7 +458,7 @@ static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
    * The above freeing of children prevents this in the first place.    
    */
    
-  if (!cmd->parent && !cmd->previous) {
+  if (cmd == cli->commands ) {
     cli->commands = cmd->next;
     if (cmd->next) {
       cmd->next->parent = NULL;
