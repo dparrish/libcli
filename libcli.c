@@ -663,7 +663,7 @@ void cli_unregister_tree(struct cli_def *cli, struct cli_command *command, int c
   struct cli_command *c, *p = NULL;
 
   if (!command) command = cli->commands;
-
+  
   for (c = command; c;) {
     p = c->next;
     if ((c->command_type == command_type) || (command_type == CLI_ANY_COMMAND)) {
@@ -673,6 +673,11 @@ void cli_unregister_tree(struct cli_def *cli, struct cli_command *command, int c
     }
     c = p;
   }
+}
+
+
+void cli_unregister_all(struct cli_def *cli, struct cli_command *command) {
+  cli_unregister_tree(cli, command, CLI_REGULAR_COMMAND);
 }
 
 int cli_done(struct cli_def *cli) {

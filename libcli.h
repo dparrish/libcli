@@ -243,6 +243,7 @@ char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_aft
 void cli_unregister_all_optarg(struct cli_command *c);
 void cli_unregister_all_filters(struct cli_def *cli);
 void cli_unregister_all_commands(struct cli_def *cli);
+void cli_unregister_all(struct cli_def *cli, struct cli_command *command) ;
 
 #ifdef __cplusplus
 }
