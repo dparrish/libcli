@@ -1,7 +1,7 @@
-#include <stdio.h>
-#include <sys/types.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdio.h>
+#include <sys/types.h>
 #ifdef WIN32
 #include <windows.h>
 #include <winsock2.h>
@@ -163,14 +163,18 @@ int regular_callback(struct cli_def *cli) {
   return CLI_OK;
 }
 
-int check_enable(const char *password) { return !strcasecmp(password, "topsecret"); }
+int check_enable(const char *password) {
+  return !strcasecmp(password, "topsecret");
+}
 
 int idle_timeout(struct cli_def *cli) {
   cli_print(cli, "Custom idle timeout");
   return CLI_QUIT;
 }
 
-void pc(UNUSED(struct cli_def *cli), const char *string) { printf("%s\n", string); }
+void pc(UNUSED(struct cli_def *cli), const char *string) {
+  printf("%s\n", string);
+}
 
 #define MODE_POLYGON_TRIANGLE 20
 #define MODE_POLYGON_RECTANGLE 21
@@ -233,34 +237,30 @@ int shape_completor(struct cli_def *cli, const char *name, const char *value, st
 
 int shape_validator(struct cli_def *cli, const char *name, const char *value) {
   const char **shape;
-  int rc = CLI_ERROR;
+
   printf("shape_validator called with <%s>\n", value);
   for (shape = KnownShapes; *shape; shape++) {
     if (!strcmp(value, *shape)) return CLI_OK;
   }
-  return rc;
+  return CLI_ERROR;
 }
 
 int verbose_validator(struct cli_def *cli, const char *name, const char *value) {
-  int rc = CLI_OK;
   printf("verbose_validator called\n");
-  return rc;
+  return CLI_OK;
 }
 
 int shape_transient_eval(struct cli_def *cli, const char *name, const char *value) {
-  int rc = CLI_OK;
   printf("shape_transient_eval called with <%s>\n", value);
   if (!strcmp(value, "rectangle")) {
     cli_set_transient_mode(cli, MODE_POLYGON_RECTANGLE);
-    rc = CLI_OK;
+    return CLI_OK;
   } else if (!strcmp(value, "triangle")) {
     cli_set_transient_mode(cli, MODE_POLYGON_TRIANGLE);
-    rc = CLI_OK;
-  } else {
-    cli_error(cli, "unrecognized value for setting %s -> %s", name, value);
-    rc = CLI_ERROR;
+    return CLI_OK;
   }
-  return rc;
+  cli_error(cli, "unrecognized value for setting %s -> %s", name, value);
+  return  CLI_ERROR;
 }
 
 const char *KnownColors[] = {"black",    "white",    "gray",      "red",        "blue",
@@ -319,8 +319,12 @@ void run_child(int x) {
   cli_set_hostname(cli, "router");
   cli_telnet_protocol(cli, 1);
   cli_regular(cli, regular_callback);
-  cli_regular_interval(cli, 5);  // Defaults to 1 second
-                                 //  cli_set_idle_timeout_callback(cli, 60, idle_timeout);  // 60 second idle timeout
+  
+  // change regular update to 5 seconds rather than default of 1 second
+  cli_regular_interval(cli, 5);
+  
+  // set 60 second idle timeout
+  cli_set_idle_timeout_callback(cli, 60, idle_timeout); 
   cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);

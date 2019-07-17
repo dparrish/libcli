@@ -95,7 +95,7 @@ enum command_types {
   CLI_ANY_COMMAND,
   CLI_REGULAR_COMMAND,
   CLI_FILTER_COMMAND,
-  CLI_BUILDMODE_COMMAND
+  CLI_BUILDMODE_COMMAND,
 };
 
 struct cli_command {

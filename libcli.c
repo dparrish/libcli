@@ -110,7 +110,7 @@ enum cli_states {
   STATE_PASSWORD,
   STATE_NORMAL,
   STATE_ENABLE_PASSWORD,
-  STATE_ENABLE
+  STATE_ENABLE,
 };
 
 struct unp {
@@ -165,7 +165,7 @@ static int cli_int_buildmode_unset_completor(struct cli_def *cli, const char *na
 static int cli_int_buildmode_unset_validator(struct cli_def *cli, const char *name, const char *value);
 static int cli_int_execute_buildmode(struct cli_def *cli);
 static void cli_int_free_found_optargs(struct cli_optarg_pair **optarg_pair);
-// static void cli_int_unset_optarg_value(struct cli_def *cli, const char *name ) ;
+static void cli_int_unset_optarg_value(struct cli_def *cli, const char *name ) ;
 static struct cli_pipeline *cli_int_generate_pipeline(struct cli_def *cli, const char *command);
 static int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 static int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
@@ -862,7 +862,7 @@ out:
     }
   }
 
-  pipeline = cli_int_free_pipeline(pipeline);
+  cli_int_free_pipeline(pipeline);
 }
 
 static void cli_clear_line(int sockfd, char *cmd, int l, int cursor) {
@@ -905,7 +905,7 @@ void cli_regular_interval(struct cli_def *cli, int seconds) {
 #define DES_PREFIX "{crypt}" /* to distinguish clear text from DES crypted */
 #define MD5_PREFIX "$1$"
 
-static int pass_matches(const char *pass, const char *try) {
+static int pass_matches(const char *pass, const char *attempt) {
   int des;
   if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX) - 1))) pass += sizeof(DES_PREFIX) - 1;
 
@@ -913,10 +913,10 @@ static int pass_matches(const char *pass, const char *try) {
   /*
    * TODO - find a small crypt(3) function for use on windows
    */
-  if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX) - 1)) try = crypt(try, pass);
+  if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX) - 1)) attempt = crypt(attempt, pass);
 #endif
 
-  return !strcmp(pass, try);
+  return !strcmp(pass, attempt);
 }
 
 #define CTRL(c) (c - '@')
@@ -1388,7 +1388,7 @@ int cli_loop(struct cli_def *cli, int sockfd) {
               if (cmd[l - 1] == ' ' || cmd[l - 1] == '|' || (comphelp.comma_separated && cmd[l - 1] == ',')) break;
               _write(sockfd, "\b", 1);
             }
-            strncpy((cmd + l), tptr, k);
+            strncpy(cmd + l, tptr, k);
             l += k;
             cursor = l;
             _write(sockfd, tptr, k);
@@ -2134,7 +2134,7 @@ int cli_unregister_optarg(struct cli_command *cmd, const char *name) {
   struct cli_optarg *ptr;
   struct cli_optarg *lastptr;
   int retval = CLI_ERROR;
-  // iterate looking for this option name, stoping at end or if name matches
+  // iterate looking for this option name, stopping at end or if name matches
   for (lastptr = NULL, ptr = cmd->optargs; ptr && strcmp(ptr->name, name); lastptr = ptr, ptr = ptr->next) {
     ;
   }
@@ -2221,9 +2221,7 @@ char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_aft
   char *value = NULL;
   struct cli_optarg_pair *optarg_pair;
 
-  printf("cli_get_optarg_value entry - looking for <%s> after <%p>\n", name, (void *)find_after);
   for (optarg_pair = cli->found_optargs; !value && optarg_pair; optarg_pair = optarg_pair->next) {
-    printf("  Checking %s with value %s <%p> \n", optarg_pair->name, optarg_pair->value, (void *)optarg_pair->value);
 
     // check next entry if this isn't our name
     if (strcasecmp(optarg_pair->name, name)) continue;
@@ -2236,12 +2234,10 @@ char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_aft
       value = optarg_pair->value;
     }
   }
-  printf("cli_get_optarg_value exit - returning <%s><%p>\n", name, value);
   return value;
 }
 
 void cli_int_free_buildmode(struct cli_def *cli) {
-
   if (!cli || !cli->buildmode) return;
   //  cli_unregister_tree(cli, cli->commands, CLI_BUILDMODE_COMMAND);
   cli->mode = cli->buildmode->mode;
@@ -2255,10 +2251,12 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   struct cli_optarg *optarg;
   struct cli_command *c;
   struct cli_buildmode *buildmode;
-
-  if ((!cli) || !(buildmode = (struct cli_buildmode *)calloc(1, sizeof(struct cli_buildmode)))) {
+  int rc = CLI_BUILDMODE_START;
+  
+  if (!cli || !(buildmode = (struct cli_buildmode *)calloc(1, sizeof(struct cli_buildmode)))) {
     cli_error(cli, "Unable to build buildmode mode for command %s", stage->command->command);
-    return CLI_BUILDMODE_ERROR;
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
   }
 
   // clean up any shrapnel from earlier - shouldn't be any but....
@@ -2280,7 +2278,8 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
     // don't allow anything that could redefine our mode or buildmode mode, or redefine exit/cancel
     if (!strcmp(optarg->name, "cancel") || (!strcmp(optarg->name, "exit"))) {
       cli_error(cli, "Unable to build buildmode mode from optarg named %s", optarg->name);
-      return CLI_BUILDMODE_ERROR;
+      rc = CLI_BUILDMODE_ERROR;
+      goto out;
     }
     if (optarg->flags & (CLI_CMD_ALLOW_BUILDMODE | CLI_CMD_TRANSIENT_MODE)) continue;
     if (optarg->mode != cli->mode && optarg->mode != cli->transient_mode)
@@ -2292,18 +2291,21 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
                             optarg->privilege, cli->mode, optarg->help, optarg->get_completions, optarg->validator,
                             NULL);
       } else {
-        return CLI_BUILDMODE_ERROR;
+          rc = CLI_BUILDMODE_ERROR;
+	  goto out;
       }
     } else {
       if (optarg->flags & CLI_CMD_OPTION_MULTIPLE) {
         if (!cli_int_register_buildmode_command(cli, NULL, optarg->name, cli_int_buildmode_flag_multiple_cback,
                                                 optarg->privilege, cli->mode, optarg->help)) {
-          return CLI_BUILDMODE_ERROR;
+          rc = CLI_BUILDMODE_ERROR;
+	  goto out;
         }
       } else {
         if (!cli_int_register_buildmode_command(cli, NULL, optarg->name, cli_int_buildmode_flag_cback,
                                                 optarg->privilege, cli->mode, optarg->help)) {
-          return CLI_BUILDMODE_ERROR;
+          rc = CLI_BUILDMODE_ERROR;
+	  goto out;
         }
       }
     }
@@ -2321,7 +2323,11 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   cli_register_optarg(c, "setting", CLI_CMD_ARGUMENT | CLI_CMD_DO_NOT_RECORD, PRIVILEGE_UNPRIVILEGED, cli->mode,
                       "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator, NULL);
 
-  return CLI_BUILDMODE_START;
+out:
+  if (rc!=CLI_BUILDMODE_START) {
+    cli_int_free_buildmode(cli);
+  }
+  return rc;
 }
 
 int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *command) {
@@ -2723,22 +2729,22 @@ void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline) {
   struct cli_optarg_pair *optarg_pair;
 
   for (i = 0, word = pipeline->words; i < pipeline->num_words; i++, word++) printf("[%s] ", *word);
-  printf("\n");
-  printf("#stages=%d, #words=%d\n", pipeline->num_stages, pipeline->num_words);
+  fprintf(stderr, "\n");
+  fprintf(stderr, "#stages=%d, #words=%d\n", pipeline->num_stages, pipeline->num_words);
 
   for (i = 0; i < pipeline->num_stages; i++) {
     stage = &(pipeline->stage[i]);
-    printf("  #%d(%d words) first_unmatched=%d: ", i, stage->num_words, stage->first_unmatched);
+    fprintf(stderr, "  #%d(%d words) first_unmatched=%d: ", i, stage->num_words, stage->first_unmatched);
     for (j = 0; j < stage->num_words; j++) {
-      printf(" [%s]", stage->words[j]);
+      fprintf(stderr, " [%s]", stage->words[j]);
     }
-    printf("\n");
+    fprintf(stderr, "\n");
 
     if (stage->command) {
-      printf("  Command: %s\n", stage->command->command);
+      fprintf(stderr, "  Command: %s\n", stage->command->command);
     }
     for (optarg_pair = stage->found_optargs; optarg_pair; optarg_pair = optarg_pair->next) {
-      printf("    %s: %s\n", optarg_pair->name, optarg_pair->value);
+      fprintf(stderr, "    %s: %s\n", optarg_pair->name, optarg_pair->value);
     }
   }
 }
@@ -3029,14 +3035,15 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       }
     }
 
+    
     // set some values for use later - makes code much easier to read
+    value = stage->words[w_idx];
+    oaptr = candidates[0];
+    validator = oaptr->validator;
     if (((oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_ARGUMENT)) && (w_idx == (stage->num_words - 1))) ||
         ((oaptr->flags & CLI_CMD_OPTIONAL_ARGUMENT) && (w_idx == (stage->num_words - 2)))) {
       is_last_word = 1;
     }
-    value = stage->words[w_idx];
-    oaptr = candidates[0];
-    validator = oaptr->validator;
 
     if ((oaptr->flags & CLI_CMD_OPTIONAL_ARGUMENT)) {
       w_incr = 2;
