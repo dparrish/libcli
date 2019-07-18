@@ -2172,9 +2172,8 @@ int cli_unregister_optarg(struct cli_command *cmd, const char *name) {
   struct cli_optarg *lastptr;
   int retval = CLI_ERROR;
   // iterate looking for this option name, stopping at end or if name matches
-  for (lastptr = NULL, ptr = cmd->optargs; ptr && strcmp(ptr->name, name); lastptr = ptr, ptr = ptr->next) {
+  for (lastptr = NULL, ptr = cmd->optargs; ptr && strcmp(ptr->name, name); lastptr = ptr, ptr = ptr->next)
     ;
-  }
 
   // if ptr, then we found the optarg to delete
   if (ptr) {
