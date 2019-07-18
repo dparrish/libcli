@@ -2329,20 +2329,20 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
                             NULL);
       } else {
           rc = CLI_BUILDMODE_ERROR;
-	  goto out;
+          goto out;
       }
     } else {
       if (optarg->flags & CLI_CMD_OPTION_MULTIPLE) {
         if (!cli_int_register_buildmode_command(cli, NULL, optarg->name, cli_int_buildmode_flag_multiple_cback,
                                                 optarg->privilege, cli->mode, optarg->help)) {
           rc = CLI_BUILDMODE_ERROR;
-	  goto out;
+          goto out;
         }
       } else {
         if (!cli_int_register_buildmode_command(cli, NULL, optarg->name, cli_int_buildmode_flag_cback,
                                                 optarg->privilege, cli->mode, optarg->help)) {
           rc = CLI_BUILDMODE_ERROR;
-	  goto out;
+          goto out;
         }
       }
     }
@@ -2361,7 +2361,7 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
                       "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator, NULL);
 
 out:
-  if (rc!=CLI_BUILDMODE_START) {
+  if (rc != CLI_BUILDMODE_START) {
     cli_int_free_buildmode(cli);
   }
   return rc;
