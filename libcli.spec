@@ -1,7 +1,7 @@
-Version: 1.9.8
+Version: 1.10.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 4
+Release: 1
 License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -67,6 +67,19 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Mon Jul 16 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.0-1
+- Add support for named arguments, optional flags, and optional arguments
+- Support help and tab complete for options/arguments
+- Enable users to add custom 'filters', including support for options/arguments
+- Replaced current interal filters with equivalent 'user filters'
+- Added examples of options/arguments to clitest
+- Added support for 'building' longer commands one option/argument at a time (buildmode)
+- Additional minor Coverity/valgrind related fixes
+- Tab completion will show up until an ambiguity, or entire entry if only one found
+- Tab completion for options/arguments will show '[]' around optional items
+- Tab completion for options/arguments will show '<>' around required items
+- Restructured clitest.c so 'cli_init()' is done in child thread
+
 * Wed Sep 19 2018 Rob Sanders <rsanders@forcepoint.com> 1.9.8-4
 - Update spac file to use relative links for libcli.so symlinks 
 
