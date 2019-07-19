@@ -304,6 +304,24 @@ int side_length_validator(struct cli_def *cli, const char *name, const char *val
   return rc;
 }
 
+int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const char *value)) {
+  char *color;
+  char *transparent;
+  
+  printf("check1_validator called \n");
+  color = cli_get_optarg_value(cli, "color", NULL);
+  transparent = cli_get_optarg_value(cli, "transparent", NULL);
+  
+  if (!color && !transparent) {
+    cli_error(cli,"\nMust supply either a color or transparent!");
+    return CLI_ERROR;
+  } else if (color && !strcmp(color,"black") && transparent) {
+    cli_error(cli, "\nCan not have a transparent black object!");
+    return CLI_ERROR;
+  }
+  return CLI_OK;
+}
+
 void run_child(int x) {
   struct cli_command *c;
   struct cli_def *cli;
@@ -352,11 +370,14 @@ void run_child(int x) {
                       "Set transparent flag", NULL, NULL, NULL);
   cli_register_optarg(c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                       "Set transparent flag", NULL, NULL, NULL);
+  cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
+                      color_completor, color_validator, NULL);
+  cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK,PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                      NULL, NULL, check1_validator,
+                      NULL);  
   cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                       "Specify shape to calclate perimeter for", shape_completor, shape_validator,
                       shape_transient_eval);
-  cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
-                      color_completor, color_validator, NULL);
   cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE,
                       "Specify side 1 length", NULL, side_length_validator, NULL);
   cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,

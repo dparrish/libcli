@@ -3000,7 +3000,14 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
        * Otherwise if the word is 'blank', could be an argument, or matches 'enough' of an option/flag it is a candidate
        * Once we accept an argument as a candidate, we're done looking for candidates as straight arguments are required
        */
-      if (stage->words[w_idx] && (oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) &&
+      if ((oaptr->flags & CLI_CMD_SPOT_CHECK) && (num_candidates==0)) {
+        stage->status = (*oaptr->validator)(cli, NULL, NULL);
+        if (stage->status != CLI_OK) {
+          stage->error_word = stage->words[w_idx];
+          cli_reprompt(cli);
+          return;
+        }
+      } else if (stage->words[w_idx] && (oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) &&
           !strcmp(oaptr->name, stage->words[w_idx])) {
         candidates[0] = oaptr;
         num_candidates = 1;
@@ -3035,7 +3042,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
     /*
      * So now we could have one or more candidates.  We need to call get help/completions *only* if this is the
      * 'last-word'
-     * Remember that last word for optinal arguments is last or next to last....
+     * Remember that last word for optional arguments is last or next to last....
      */
     if (lastchar != '\0') {
       int called_comphelp = 0;
