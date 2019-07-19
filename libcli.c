@@ -3000,7 +3000,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
        * Otherwise if the word is 'blank', could be an argument, or matches 'enough' of an option/flag it is a candidate
        * Once we accept an argument as a candidate, we're done looking for candidates as straight arguments are required
        */
-      if ((oaptr->flags & CLI_CMD_SPOT_CHECK) && (num_candidates==0)) {
+      if ((oaptr->flags & CLI_CMD_SPOT_CHECK) && (num_candidates == 0)) {
         stage->status = (*oaptr->validator)(cli, NULL, NULL);
         if (stage->status != CLI_OK) {
           stage->error_word = stage->words[w_idx];
