@@ -260,7 +260,7 @@ int shape_transient_eval(struct cli_def *cli, const char *name, const char *valu
     return CLI_OK;
   }
   cli_error(cli, "unrecognized value for setting %s -> %s", name, value);
-  return  CLI_ERROR;
+  return CLI_ERROR;
 }
 
 const char *KnownColors[] = {"black",    "white",    "gray",      "red",        "blue",
@@ -319,12 +319,12 @@ void run_child(int x) {
   cli_set_hostname(cli, "router");
   cli_telnet_protocol(cli, 1);
   cli_regular(cli, regular_callback);
-  
+
   // change regular update to 5 seconds rather than default of 1 second
   cli_regular_interval(cli, 5);
-  
+
   // set 60 second idle timeout
-  cli_set_idle_timeout_callback(cli, 60, idle_timeout); 
+  cli_set_idle_timeout_callback(cli, 60, idle_timeout);
   cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
