@@ -85,3 +85,7 @@ rpmprep:
 
 rpm: rpmprep
 	rpmbuild -ta libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --define "debug_package %{nil}" --clean
+
+lint:
+	clang-tidy -quiet -warnings-as-errors *.c *.h
+

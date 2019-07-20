@@ -307,15 +307,15 @@ int side_length_validator(struct cli_def *cli, const char *name, const char *val
 int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const char *value)) {
   char *color;
   char *transparent;
-  
+
   printf("check1_validator called \n");
   color = cli_get_optarg_value(cli, "color", NULL);
   transparent = cli_get_optarg_value(cli, "transparent", NULL);
-  
+
   if (!color && !transparent) {
-    cli_error(cli,"\nMust supply either a color or transparent!");
+    cli_error(cli, "\nMust supply either a color or transparent!");
     return CLI_ERROR;
-  } else if (color && !strcmp(color,"black") && transparent) {
+  } else if (color && !strcmp(color, "black") && transparent) {
     cli_error(cli, "\nCan not have a transparent black object!");
     return CLI_ERROR;
   }
@@ -372,9 +372,8 @@ void run_child(int x) {
                       "Set transparent flag", NULL, NULL, NULL);
   cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
                       color_completor, color_validator, NULL);
-  cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK,PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      NULL, NULL, check1_validator,
-                      NULL);  
+  cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL, NULL,
+                      check1_validator, NULL);
   cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                       "Specify shape to calclate perimeter for", shape_completor, shape_validator,
                       shape_transient_eval);
