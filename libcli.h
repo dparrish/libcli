@@ -132,6 +132,7 @@ enum optarg_flags {
   CLI_CMD_DO_NOT_RECORD = 1 << 7,
   CLI_CMD_REMAINDER_OF_LINE = 1 << 8,
   CLI_CMD_HYPHENATED_OPTION = 1 << 9,
+  CLI_CMD_SPOT_CHECK = 1 << 10,
 };
 
 struct cli_optarg {
