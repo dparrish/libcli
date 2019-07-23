@@ -2916,6 +2916,8 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
   int is_last_word = 0;
   int (*validator)(struct cli_def *, const char *name, const char *value);
 
+  if (cli->buildmode) cli->found_optargs = cli->buildmode->found_optargs;
+  else cli->found_optargs = stage->found_optargs;
   /*
    * Tab completion and help are *only* allowed at end of string, but we need to process the entire command to know what
    * has already been found.  There should be no ambiguities before the 'last' word.
@@ -2960,7 +2962,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         if (stage->status != CLI_OK) {
           stage->error_word = stage->words[word_idx];
           cli_reprompt(cli);
-          return;
+          goto done;
         }
       } else if (stage->words[word_idx] && (oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) &&
                  !strcmp(oaptr->name, stage->words[word_idx])) {
@@ -2992,7 +2994,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_AMBIGUOUS;
       cli_error(cli, "Ambiguous option/argument for command %s", stage->command->command);
-      return;
+      goto done;
     }
 
     /*
@@ -3021,7 +3023,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       // If we were 'end-of-word' and looked for completions/help, return to user
       if (called_comphelp) {
         stage->status = CLI_OK;
-        return;
+        goto done;
       }
     }
 
@@ -3041,7 +3043,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         cli_error(cli, "Optional argument %s requires a value", stage->words[word_idx]);
         stage->error_word = stage->words[word_idx];
         stage->status = CLI_MISSING_VALUE;
-        return;
+        goto done;
       }
       value = stage->words[word_idx + 1];
     }
@@ -3076,7 +3078,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
           cli_reprompt(cli);
           stage->error_word = stage->words[word_idx];
           stage->status = CLI_ERROR;
-          return;
+          goto done;
         }
       }
     } else {
@@ -3085,20 +3087,20 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       cli_reprompt(cli);
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_ERROR;
-      return;
+      goto done;
     }
 
     // If this optarg can set the transient mode, then evaluate it if we're not at last word
     if (oaptr->transient_mode && oaptr->transient_mode(cli, oaptr->name, value)) {
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_ERROR;
-      return;
+      goto done;
     }
 
     // Only do buildmode optargs if we're a executing a command, parsing command (stage 0), and this is the last word
     if ((stage->status == CLI_OK) && (oaptr->flags & CLI_CMD_ALLOW_BUILDMODE) && is_last_word) {
       stage->status = cli_int_enter_buildmode(cli, stage, value);
-      return;
+      goto done;
     }
 
     // Optional flags and arguments can appear multiple times, but true arguments only once.  Advance our optarg
@@ -3121,10 +3123,14 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       if (optarg->flags & CLI_CMD_ARGUMENT) {
         cli_error(cli, "Incomplete command, missing required argument '%s'", optarg->name);
         stage->status = CLI_MISSING_ARGUMENT;
-        return;
+        goto done;
       }
     }
   }
+
+done:
+  if (cli->buildmode) cli->buildmode->found_optargs = cli->found_optargs;
+  else stage->found_optargs = cli->found_optargs;
   return;
 }
 
