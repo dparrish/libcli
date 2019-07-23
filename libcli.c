@@ -141,7 +141,6 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
 static int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stage, char *mode_text);
 static char *cli_int_buildmode_extend_cmdline(char *, char *word);
 static void cli_int_free_buildmode(struct cli_def *cli);
-static int cli_int_add_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple);
 static void cli_free_command(struct cli_def *cli, struct cli_command *cmd);
 static int cli_int_unregister_command_core(struct cli_def *cli, const char *command, int command_type);
 static int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *command) __attribute__((unused));
@@ -2183,7 +2182,7 @@ void cli_int_unset_optarg_value(struct cli_def *cli, const char *name) {
   }
 }
 
-int cli_int_add_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple) {
+int cli_set_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple) {
   struct cli_optarg_pair *optarg_pair, **anchor;
   int rc = CLI_ERROR;
 
@@ -2452,7 +2451,7 @@ int cli_int_buildmode_flag_cback(struct cli_def *cli, const char *command, char 
     cli_error(cli, "Extra arguments on command line, command ignored.");
     rc = CLI_ERROR;
   }
-  if (cli_int_add_optarg_value(cli, command, command, 0)) {
+  if (cli_set_optarg_value(cli, command, command, 0)) {
     cli_error(cli, "Problem setting value for optional flag %s", command);
     rc = CLI_ERROR;
   }
@@ -2467,7 +2466,7 @@ int cli_int_buildmode_flag_multiple_cback(struct cli_def *cli, const char *comma
     cli_error(cli, "Extra arguments on command line, command ignored.");
     rc = CLI_ERROR;
   }
-  if (cli_int_add_optarg_value(cli, command, command, CLI_CMD_OPTION_MULTIPLE)) {
+  if (cli_set_optarg_value(cli, command, command, CLI_CMD_OPTION_MULTIPLE)) {
     cli_error(cli, "Problem setting value for optional flag %s", command);
     rc = CLI_ERROR;
   }
@@ -2842,7 +2841,8 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
   char *allow_buildmode = BUILDMODE_NO;
   int (*get_completions)(struct cli_def *, const char *, const char *, struct cli_comphelp *) = NULL;
   char *tptr = NULL;
-
+  char *tname = NULL;
+  
   // If we've already seen a value by this exact name, skip it, unless the multiple flag is set
   if (cli_find_optarg_value(cli, optarg->name, NULL) && !(optarg->flags & (CLI_CMD_OPTION_MULTIPLE))) return;
 
@@ -2885,16 +2885,17 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
   }
 
   // Fill in with help text or completor value(s) as indicated
-  if (lastchar == '?' && asprintf(&tptr, "%s%s%s", delim_start, optarg->name, delim_end) != -1) {
+  if (lastchar == '?' && asprintf(&tname, "%s%s%s", delim_start, optarg->name, delim_end) != -1) {
     if (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) allow_buildmode = BUILDMODE_YES;
-    if (help_insert && (asprintf(&tptr, "  %-20s enter '%s' to %s%s", tptr, optarg->name,
+    if (help_insert && (asprintf(&tptr, "  %-20s enter '%s' to %s%s", tname, optarg->name,
                                  (optarg->help) ? optarg->help : "", allow_buildmode) != -1)) {
       cli_add_comphelp_entry(comphelp, tptr);
       free_z(tptr);
-    } else if (asprintf(&tptr, "  %-20s %s%s", tptr, (optarg->help) ? optarg->help : "", allow_buildmode) != -1) {
+    } else if (asprintf(&tptr, "  %-20s %s%s", tname, (optarg->help) ? optarg->help : "", allow_buildmode) != -1) {
       cli_add_comphelp_entry(comphelp, tptr);
       free_z(tptr);
     }
+    free_z(tname);
   } else if (lastchar == CTRL('I')) {
     if (get_completions) {
       (*get_completions)(cli, optarg->name, next_word, comphelp);
@@ -2916,6 +2917,8 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
   int is_last_word = 0;
   int (*validator)(struct cli_def *, const char *name, const char *value);
 
+  if (cli->buildmode) cli->found_optargs = cli->buildmode->found_optargs;
+  else cli->found_optargs = stage->found_optargs;
   /*
    * Tab completion and help are *only* allowed at end of string, but we need to process the entire command to know what
    * has already been found.  There should be no ambiguities before the 'last' word.
@@ -2960,7 +2963,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         if (stage->status != CLI_OK) {
           stage->error_word = stage->words[word_idx];
           cli_reprompt(cli);
-          return;
+          goto done;
         }
       } else if (stage->words[word_idx] && (oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) &&
                  !strcmp(oaptr->name, stage->words[word_idx])) {
@@ -2992,7 +2995,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_AMBIGUOUS;
       cli_error(cli, "Ambiguous option/argument for command %s", stage->command->command);
-      return;
+      goto done;
     }
 
     /*
@@ -3021,7 +3024,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       // If we were 'end-of-word' and looked for completions/help, return to user
       if (called_comphelp) {
         stage->status = CLI_OK;
-        return;
+        goto done;
       }
     }
 
@@ -3041,7 +3044,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         cli_error(cli, "Optional argument %s requires a value", stage->words[word_idx]);
         stage->error_word = stage->words[word_idx];
         stage->status = CLI_MISSING_VALUE;
-        return;
+        goto done;
       }
       value = stage->words[word_idx + 1];
     }
@@ -3064,10 +3067,10 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         if (oaptr->flags & CLI_CMD_REMAINDER_OF_LINE) {
           char *combined = NULL;
           combined = join_words(stage->num_words - word_idx, stage->words + word_idx);
-          set_value_return = cli_int_add_optarg_value(cli, oaptr->name, combined, 0);
+          set_value_return = cli_set_optarg_value(cli, oaptr->name, combined, 0);
           free_z(combined);
         } else {
-          set_value_return = cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags & CLI_CMD_OPTION_MULTIPLE);
+          set_value_return = cli_set_optarg_value(cli, oaptr->name, value, oaptr->flags & CLI_CMD_OPTION_MULTIPLE);
         }
 
         if (set_value_return != CLI_OK) {
@@ -3076,7 +3079,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
           cli_reprompt(cli);
           stage->error_word = stage->words[word_idx];
           stage->status = CLI_ERROR;
-          return;
+          goto done;
         }
       }
     } else {
@@ -3085,20 +3088,20 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       cli_reprompt(cli);
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_ERROR;
-      return;
+      goto done;
     }
 
     // If this optarg can set the transient mode, then evaluate it if we're not at last word
     if (oaptr->transient_mode && oaptr->transient_mode(cli, oaptr->name, value)) {
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_ERROR;
-      return;
+      goto done;
     }
 
     // Only do buildmode optargs if we're a executing a command, parsing command (stage 0), and this is the last word
     if ((stage->status == CLI_OK) && (oaptr->flags & CLI_CMD_ALLOW_BUILDMODE) && is_last_word) {
       stage->status = cli_int_enter_buildmode(cli, stage, value);
-      return;
+      goto done;
     }
 
     // Optional flags and arguments can appear multiple times, but true arguments only once.  Advance our optarg
@@ -3121,10 +3124,14 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       if (optarg->flags & CLI_CMD_ARGUMENT) {
         cli_error(cli, "Incomplete command, missing required argument '%s'", optarg->name);
         stage->status = CLI_MISSING_ARGUMENT;
-        return;
+        goto done;
       }
     }
   }
+
+done:
+  if (cli->buildmode) cli->buildmode->found_optargs = cli->found_optargs;
+  else stage->found_optargs = cli->found_optargs;
   return;
 }
 

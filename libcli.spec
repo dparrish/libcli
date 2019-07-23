@@ -1,7 +1,7 @@
 Version: 1.10.0
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 1
+Release: 2
 License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -60,14 +60,19 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %files devel
-%doc README
+%doc README.md doc/developers-guide.md
 %{_libdir}/*.so*
 %{_libdir}/*.a
 %{_includedir}/*.h
 %defattr(-, root, root)
 
 %changelog
-* Mon Jul 16 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.0-1
+* Tue Jul 23 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.0-2
+- Fix spec file and rpm build issues
+- Fix 2 memory leaks (tab completion and help formatting)
+- Expose cli_set_optarg_value() for external use
+
+* Tue Jul 16 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.0-1
 - Add support for named arguments, optional flags, and optional arguments
 - Support help and tab complete for options/arguments
 - Enable users to add custom 'filters', including support for options/arguments

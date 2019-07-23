@@ -254,9 +254,11 @@ int shape_transient_eval(struct cli_def *cli, const char *name, const char *valu
   printf("shape_transient_eval called with <%s>\n", value);
   if (!strcmp(value, "rectangle")) {
     cli_set_transient_mode(cli, MODE_POLYGON_RECTANGLE);
+    cli_set_optarg_value(cli, "duplicateShapeValue", value, 0);
     return CLI_OK;
   } else if (!strcmp(value, "triangle")) {
     cli_set_transient_mode(cli, MODE_POLYGON_TRIANGLE);
+    cli_set_optarg_value(cli, "duplicateShapeValue", value, 0);
     return CLI_OK;
   }
   cli_error(cli, "unrecognized value for setting %s -> %s", name, value);
