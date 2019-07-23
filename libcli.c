@@ -141,7 +141,6 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
 static int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stage, char *mode_text);
 static char *cli_int_buildmode_extend_cmdline(char *, char *word);
 static void cli_int_free_buildmode(struct cli_def *cli);
-static int cli_int_add_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple);
 static void cli_free_command(struct cli_def *cli, struct cli_command *cmd);
 static int cli_int_unregister_command_core(struct cli_def *cli, const char *command, int command_type);
 static int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *command) __attribute__((unused));
@@ -2183,7 +2182,7 @@ void cli_int_unset_optarg_value(struct cli_def *cli, const char *name) {
   }
 }
 
-int cli_int_add_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple) {
+int cli_set_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple) {
   struct cli_optarg_pair *optarg_pair, **anchor;
   int rc = CLI_ERROR;
 
@@ -2452,7 +2451,7 @@ int cli_int_buildmode_flag_cback(struct cli_def *cli, const char *command, char 
     cli_error(cli, "Extra arguments on command line, command ignored.");
     rc = CLI_ERROR;
   }
-  if (cli_int_add_optarg_value(cli, command, command, 0)) {
+  if (cli_set_optarg_value(cli, command, command, 0)) {
     cli_error(cli, "Problem setting value for optional flag %s", command);
     rc = CLI_ERROR;
   }
@@ -2467,7 +2466,7 @@ int cli_int_buildmode_flag_multiple_cback(struct cli_def *cli, const char *comma
     cli_error(cli, "Extra arguments on command line, command ignored.");
     rc = CLI_ERROR;
   }
-  if (cli_int_add_optarg_value(cli, command, command, CLI_CMD_OPTION_MULTIPLE)) {
+  if (cli_set_optarg_value(cli, command, command, CLI_CMD_OPTION_MULTIPLE)) {
     cli_error(cli, "Problem setting value for optional flag %s", command);
     rc = CLI_ERROR;
   }
@@ -3066,10 +3065,10 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         if (oaptr->flags & CLI_CMD_REMAINDER_OF_LINE) {
           char *combined = NULL;
           combined = join_words(stage->num_words - word_idx, stage->words + word_idx);
-          set_value_return = cli_int_add_optarg_value(cli, oaptr->name, combined, 0);
+          set_value_return = cli_set_optarg_value(cli, oaptr->name, combined, 0);
           free_z(combined);
         } else {
-          set_value_return = cli_int_add_optarg_value(cli, oaptr->name, value, oaptr->flags & CLI_CMD_OPTION_MULTIPLE);
+          set_value_return = cli_set_optarg_value(cli, oaptr->name, value, oaptr->flags & CLI_CMD_OPTION_MULTIPLE);
         }
 
         if (set_value_return != CLI_OK) {

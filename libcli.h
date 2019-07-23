@@ -241,6 +241,7 @@ char *cli_find_optarg_value(struct cli_def *cli, char *name, char *find_after);
 struct cli_optarg_pair *cli_get_all_found_optargs(struct cli_def *cli);
 int cli_unregister_optarg(struct cli_command *cmd, const char *name);
 char *cli_get_optarg_value(struct cli_def *cli, const char *name, char *find_after);
+int cli_set_optarg_value(struct cli_def *cli, const char *name, const char *value, int allow_multiple);
 void cli_unregister_all_optarg(struct cli_command *c);
 void cli_unregister_all_filters(struct cli_def *cli);
 void cli_unregister_all_commands(struct cli_def *cli);
