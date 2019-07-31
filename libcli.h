@@ -247,6 +247,18 @@ void cli_unregister_all_filters(struct cli_def *cli);
 void cli_unregister_all_commands(struct cli_def *cli);
 void cli_unregister_all(struct cli_def *cli, struct cli_command *command);
 
+/*
+ * Expose some previous internal routines.  Just in case someone was using those 
+ * with an explicit reference, the original routines (cli_int_*) internally point
+ * to the newly public routines.
+ */
+int cli_help(struct cli_def *cli, const char *command, char *argv[], int argc) ;
+int cli_history(struct cli_def *cli, const char *command, char *argv[], int argc) ;
+int cli_exit(struct cli_def *cli, const char *command, char *argv[], int argc) ;
+int cli_quit(struct cli_def *cli, const char *command, char *argv[], int argc) ;
+int cli_enable(struct cli_def *cli, const char *command, char *argv[], int argc) ;
+int cli_disable(struct cli_def *cli, const char *command, char *argv[], int argc) ;
+
 #ifdef __cplusplus
 }
 #endif

@@ -500,7 +500,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c) {
   return CLI_OK;
 }
 
-int cli_int_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+int cli_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
   if (cli->privilege == PRIVILEGE_PRIVILEGED) return CLI_OK;
 
   if (!cli->enable_password && !cli->enable_callback) {
@@ -515,19 +515,19 @@ int cli_int_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char
   return CLI_OK;
 }
 
-int cli_int_disable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+int cli_disable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
   cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
   cli_set_configmode(cli, MODE_EXEC, NULL);
   return CLI_OK;
 }
 
-int cli_int_help(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+int cli_help(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
   cli_error(cli, "\nCommands available:");
   cli_show_help(cli, cli->commands);
   return CLI_OK;
 }
 
-int cli_int_history(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+int cli_history(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
   int i;
 
   cli_error(cli, "\nCommand history:");
@@ -538,14 +538,14 @@ int cli_int_history(struct cli_def *cli, UNUSED(const char *command), UNUSED(cha
   return CLI_OK;
 }
 
-int cli_int_quit(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+int cli_quit(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
   cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
   cli_set_configmode(cli, MODE_EXEC, NULL);
   return CLI_QUIT;
 }
 
-int cli_int_exit(struct cli_def *cli, const char *command, char *argv[], int argc) {
-  if (cli->mode == MODE_EXEC) return cli_int_quit(cli, command, argv, argc);
+int cli_exit(struct cli_def *cli, const char *command, char *argv[], int argc) {
+  if (cli->mode == MODE_EXEC) return cli_quit(cli, command, argv, argc);
 
   if (cli->mode > MODE_CONFIG)
     cli_set_configmode(cli, MODE_CONFIG, NULL);
@@ -580,15 +580,15 @@ struct cli_def *cli_init() {
   }
   cli->telnet_protocol = 1;
 
-  cli_register_command(cli, 0, "help", cli_int_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
-  cli_register_command(cli, 0, "quit", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
-  cli_register_command(cli, 0, "logout", cli_int_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
-  cli_register_command(cli, 0, "exit", cli_int_exit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Exit from current mode");
-  cli_register_command(cli, 0, "history", cli_int_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
+  cli_register_command(cli, 0, "help", cli_help, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Show available commands");
+  cli_register_command(cli, 0, "quit", cli_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
+  cli_register_command(cli, 0, "logout", cli_quit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Disconnect");
+  cli_register_command(cli, 0, "exit", cli_exit, PRIVILEGE_UNPRIVILEGED, MODE_ANY, "Exit from current mode");
+  cli_register_command(cli, 0, "history", cli_history, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                        "Show a list of previously run commands");
-  cli_register_command(cli, 0, "enable", cli_int_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+  cli_register_command(cli, 0, "enable", cli_enable, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                        "Turn on privileged commands");
-  cli_register_command(cli, 0, "disable", cli_int_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC,
+  cli_register_command(cli, 0, "disable", cli_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC,
                        "Turn off privileged commands");
 
   c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
@@ -3141,4 +3141,33 @@ void cli_unregister_all_commands(struct cli_def *cli) {
 
 void cli_unregister_all_filters(struct cli_def *cli) {
   cli_unregister_tree(cli, cli->commands, CLI_FILTER_COMMAND);
+}
+
+/*
+ * Several routines were declared as internal, but would be useful for external use also
+ * Rename them so they can be exposed, but have original routines simply call the 'public' ones
+ */
+ 
+int cli_int_quit(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+  return cli_quit(cli, command, argv, argc);
+}
+
+int cli_int_help(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+  return cli_help(cli, command, argv, argc);
+}
+
+int cli_int_history(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+  return cli_history(cli, command, argv, argc);
+}
+
+int cli_int_exit(struct cli_def *cli, const char *command, char *argv[], int argc) {
+  return cli_exit(cli, command, argv, argc);
+}
+
+int cli_int_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+  return cli_enable(cli, command, argv, argc);
+}
+
+int cli_int_disable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
+  return cli_disable(cli, command, argv, argc);
 }
