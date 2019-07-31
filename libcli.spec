@@ -72,6 +72,8 @@ rm -rf $RPM_BUILD_ROOT
 - Renamed cli_int_[help|history|exit|quit|enable|disable] to
   same routine minut '_int_', and exposed in libcli.h.  Retained
   old command pointing to new command for backward compatability
+- Fix coerner case in buildmode where no extra settings specified
+  and user enters 'exit'
 * Tue Jul 23 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.0-2
 - Fix spec file and rpm build issues
 - Fix 2 memory leaks (tab completion and help formatting)

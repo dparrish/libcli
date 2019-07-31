@@ -81,6 +81,7 @@ struct cli_def {
   void *user_context;
   struct cli_optarg_pair *found_optargs;
   int transient_mode;
+  int disallow_buildmode;
   struct cli_pipeline *pipeline;
   struct cli_buildmode *buildmode;
 };

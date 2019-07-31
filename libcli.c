@@ -1027,9 +1027,12 @@ int cli_loop(struct cli_def *cli, int sockfd) {
 
       /*
        * Ensure our transient mode is reset to the starting mode on *each* loop traversal transient mode is valid only
-       * while a command is being evaluated/executed.
+       * while a command is being evaluated/executed.  Also explicitly set the disallow_buildmode flag based on whether or
+       * not cli->buildmode is NULL or not.  The cli->buildmode flag can be changed during process, but the enable/disable 
+       * needs to be set before any processing is entered.
        */
       cli->transient_mode = cli->mode;
+      cli->disallow_buildmode = (cli->buildmode) ? 1 : 0;
 
       if (cli->showprompt) {
         if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD) _write(sockfd, "\r\n", 2);
@@ -2402,7 +2405,11 @@ int cli_int_execute_buildmode(struct cli_def *cli) {
   if (rc == CLI_OK) {
     cli_int_free_buildmode(cli);
     cli_add_history(cli, cmdline);
+    // disallow processing of buildmode so we don't wind up in a potential loop
+    // main loop will also set as required
+    cli->disallow_buildmode=1;
     rc = cli_run_command(cli, cmdline);
+
   }
   free_z(cmdline);
   cli_int_free_buildmode(cli);
@@ -3098,8 +3105,8 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       goto done;
     }
 
-    // Only do buildmode optargs if we're a executing a command, parsing command (stage 0), and this is the last word
-    if ((stage->status == CLI_OK) && (oaptr->flags & CLI_CMD_ALLOW_BUILDMODE) && is_last_word) {
+    // Only process CLI_CMD_ALLOW_BUILDMODE if we're not already in buildmode, parsing command (stage 0), and this is the last word
+    if (!cli->disallow_buildmode && (stage->status == CLI_OK) && (oaptr->flags & CLI_CMD_ALLOW_BUILDMODE) && is_last_word) {
       stage->status = cli_int_enter_buildmode(cli, stage, value);
       goto done;
     }
