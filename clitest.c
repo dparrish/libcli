@@ -184,16 +184,15 @@ int cmd_perimeter(struct cli_def *cli, const char *command, char *argv[], int ar
   int i = 1, numSides = 0;
   int perimeter = 0;
   int verbose_count = 0;
-  char *verboseArg = NULL;
+  char *verboseArg;
   char *shapeName = NULL;
 
   cli_print(cli, "perimeter callback, with %d args", argc);
   for (; optargs; optargs = optargs->next) cli_print(cli, "%d, %s=%s", i++, optargs->name, optargs->value);
 
-  if ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg))) {
-    do {
-      verbose_count++;
-    } while ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg)));
+  verboseArg = NULL;
+  while ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg))) {
+    verbose_count++;
   }
   cli_print(cli, "verbose argument was seen  %d times", verbose_count);
 
