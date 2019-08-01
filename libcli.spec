@@ -75,6 +75,7 @@ rm -rf $RPM_BUILD_ROOT
 - Fix coerner case in buildmode where no extra settings specified
   and user enters 'exit'
 - Rename buildmode 'exit' command to 'execute' based on feedback
+
 * Tue Jul 23 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.0-2
 - Fix spec file and rpm build issues
 - Fix 2 memory leaks (tab completion and help formatting)
