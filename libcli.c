@@ -2276,7 +2276,7 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   // Build new *limited* list of commands from this commands optargs
   for (optarg = stage->command->optargs; optarg; optarg = optarg->next) {
     // Don't allow anything that could redefine our mode or buildmode mode, or redefine exit/cancel/show/unset
-    if (!strcmp(optarg->name, "cancel") || !strcmp(optarg->name, "exit") || !strcmp(optarg->name, "show") ||
+    if (!strcmp(optarg->name, "cancel") || !strcmp(optarg->name, "execute") || !strcmp(optarg->name, "show") ||
         !strcmp(optarg->name, "unset")) {
       cli_error(cli, "Default buildmode command conflicts with optarg named %s", optarg->name);
       rc = CLI_BUILDMODE_ERROR;
@@ -2315,8 +2315,8 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   // And lastly four 'always there' commands to cancel current mode and to execute the command, show settings, and unset
   cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, PRIVILEGE_UNPRIVILEGED,
                                      cli->mode, "Cancel command");
-  cli_int_register_buildmode_command(cli, NULL, "exit", cli_int_buildmode_exit_cback, PRIVILEGE_UNPRIVILEGED, cli->mode,
-                                     "Exit and execute command");
+  cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_exit_cback, PRIVILEGE_UNPRIVILEGED, cli->mode,
+                                     "Execute command");
   cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, PRIVILEGE_UNPRIVILEGED, cli->mode,
                                      "Show current settings");
   c = cli_int_register_buildmode_command(cli, NULL, "unset", cli_int_buildmode_unset_cback, PRIVILEGE_UNPRIVILEGED,
