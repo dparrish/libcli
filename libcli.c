@@ -166,6 +166,7 @@ static int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pi
 inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 static void cli_int_free_pipeline(struct cli_pipeline *pipeline);
 static void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
+static void cli_int_wrap_help_line (char *nameptr, char *helpptr, struct cli_comphelp *comphelp) ;
 
 static ssize_t _write(int fd, const void *buf, size_t count) {
   size_t written = 0;
@@ -861,8 +862,9 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
     }
 
     if (lastchar == '?') {
-      if (asprintf(&strptr, "  %-20s %s", c->command, (c->help) ? c->help : "") != -1) {
-        cli_add_comphelp_entry(comphelp, strptr);
+      
+      if (asprintf(&strptr, "  %-20s ", c->command) != -1) {
+        cli_int_wrap_help_line (strptr, c->help, comphelp);
         free_z(strptr);
       }
     } else {
@@ -2407,7 +2409,7 @@ int cli_int_execute_buildmode(struct cli_def *cli) {
     cli_add_history(cli, cmdline);
     // disallow processing of buildmode so we don't wind up in a potential loop
     // main loop will also set as required
-    cli->disallow_buildmode=1;
+    cli->disallow_buildmode = 1;
     rc = cli_run_command(cli, cmdline);
 
   }
@@ -2830,13 +2832,63 @@ int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline)
   return rc;
 }
 
+/*
+ *  Attemp quick dirty wrapping of helptext taking into account the offset from name, embedded
+ *  cr/lf in helptext, and trying to split on last white-text before the margin
+ */
+void cli_int_wrap_help_line (char *nameptr, char *helpptr, struct cli_comphelp *comphelp) {
+  int maxwidth = 80;  // temporary assumption, to be fixed later when libcli 'understands' screen dimensions
+  int availwidth;
+  int namewidth;
+  int toprint;
+  char *crlf;
+  char *line;
+  char emptystring[]="";
+  namewidth = strlen(nameptr);
+  availwidth = maxwidth - namewidth;      
+  
+  if (!helpptr) helpptr = emptystring;
+  /*
+   * Now we need to iterate one or more times to only print out at most 
+   * maxwidth - leftwidth characters of helpptr.  Note that there are no
+   * tabs in helpptr, so each 'char' displays as one char
+   */
+       
+  do {
+    toprint = strlen(helpptr);
+    if (toprint > availwidth) {
+      toprint = availwidth;
+      while ((toprint>=0) && !isspace(helpptr[toprint])) toprint--;
+      if ( toprint < 0) {
+        // if we backed up and found no whitespace, dump as much as we can
+	toprint = availwidth;
+      }
+    }  // see if we might have an embedded carriage return or line feed
+    if ( (crlf = strpbrk(helpptr,"\n\r"))) {
+      // crlf is a pointer - see if it is 'before' the toprint index
+      if ((crlf-helpptr) < toprint) {
+        // ok, crlf is before the wrap, us it
+        toprint = (crlf-helpptr);
+      }
+    }
+    
+    if (asprintf(&line, "%*.*s%.*s", namewidth, namewidth, nameptr, toprint, helpptr) < 0) break;
+    cli_add_comphelp_entry(comphelp, line);
+    if (nameptr != emptystring) {
+      nameptr = emptystring;
+    }
+    free_z(line);
+    helpptr += toprint;
+    // advance to first non whitespace
+    while (helpptr && isspace(*helpptr)) helpptr++;
+  } while (*helpptr);
+}
+
 static char DELIM_OPT_START[] = "[";
 static char DELIM_OPT_END[] = "]";
 static char DELIM_ARG_START[] = "<";
 static char DELIM_ARG_END[] = ">";
 static char DELIM_NONE[] = "";
-static char BUILDMODE_YES[] = " (enter buildmode)";
-static char BUILDMODE_NO[] = "";
 
 static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *optarg, struct cli_comphelp *comphelp,
                                     int num_candidates, const char lastchar, const char *anchor_word,
@@ -2845,10 +2897,8 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
   char *delim_start = DELIM_NONE;
 
   char *delim_end = DELIM_NONE;
-  char *allow_buildmode = BUILDMODE_NO;
   int (*get_completions)(struct cli_def *, const char *, const char *, struct cli_comphelp *) = NULL;
   char *tptr = NULL;
-  char *tname = NULL;
   
   // If we've already seen a value by this exact name, skip it, unless the multiple flag is set
   if (cli_find_optarg_value(cli, optarg->name, NULL) && !(optarg->flags & (CLI_CMD_OPTION_MULTIPLE))) return;
@@ -2892,17 +2942,71 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
   }
 
   // Fill in with help text or completor value(s) as indicated
-  if (lastchar == '?' && asprintf(&tname, "%s%s%s", delim_start, optarg->name, delim_end) != -1) {
-    if (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) allow_buildmode = BUILDMODE_YES;
-    if (help_insert && (asprintf(&tptr, "  %-20s enter '%s' to %s%s", tname, optarg->name,
-                                 (optarg->help) ? optarg->help : "", allow_buildmode) != -1)) {
-      cli_add_comphelp_entry(comphelp, tptr);
-      free_z(tptr);
-    } else if (asprintf(&tptr, "  %-20s %s%s", tname, (optarg->help) ? optarg->help : "", allow_buildmode) != -1) {
-      cli_add_comphelp_entry(comphelp, tptr);
-      free_z(tptr);
+  if (lastchar == '?') {
+    /*
+     *  Note - help is a bit complex, and we could optimize it.  But it isn't done often,
+     *  so we're always going to do it on the fly.  Help output will consist of a 'name' and a 'text' 
+     *  field and some formatting.  The 'help' member of an optarg is a single string, that may contain
+     *  both embedded tabs and newlines.  The tab characters (and end-of-string) are used as delimiters.
+     *  On the first pass through the string the 'name' will be the name of the optarg, and the 'text'
+     *  will be the first field.  There after we pull name/text delimited pairs until nothing is left.
+     *  The first pass through will be indented 2 spaces on the left with the formated name occupying 
+     *  20 spaces (expanding if more than 20).  If the command is a 'buildmode' command the first 
+     *  character of the 'text' will be an asterisk.  The 'rest' of the line (assuming an 80 character '
+     *  wide line for now) will be used to wrap the 'text' field honoring embedded newlines, and trying to 
+     *  wrap on nearest preceeding whitespace when it hits a boundary.  Subsequent lines will be indented 
+     *  by an additional 2 spaces, and will drop the asterisk.
+     */
+    char *working = NULL;
+    char *nameptr = NULL;
+    char *helpptr = NULL;
+    char *saveptr = NULL;  
+    char *tname = NULL; 
+    int indent = 2;
+    int helplen;
+    char emptystring[] = "";
+    // print out actual text into a working buffer that we can then call 'strtok_r' on
+
+    helplen = asprintf(&working, "%s%s%s%s%s",
+    	(optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
+	(help_insert) ? "enter '" : "",
+	(help_insert) ? optarg->name : "",
+	(help_insert) ? "' to set " : "",
+	(help_insert) ? optarg->name : optarg->help);
+
+    // preload out nptr,hptr fields;
+    nameptr = optarg->name;
+
+    if (helplen < 0) {
+      helpptr = emptystring;
+      working = NULL;
     }
-    free_z(tname);
+    else {
+      helpptr = strtok_r(working, "\t", &saveptr);
+    }
+      
+    // break things up into tab separated entities - always show the first entry
+    do {
+      char *leftcolumn;
+      if (asprintf(&tname, "%s%s%s", delim_start, nameptr, delim_end) == -1) break;
+      if (asprintf(&leftcolumn, "%*.*s%-20s " , indent, indent, "", tname) == -1) break;
+
+      cli_int_wrap_help_line(leftcolumn, helpptr, comphelp);      
+      
+      // clear out any delimiter settings and set indent for any subtext
+      delim_start = DELIM_NONE;
+      delim_end = DELIM_NONE;
+      indent = 4;
+      free_z(tname);
+      free_z(leftcolumn);
+      
+      // we may not need to show all off the 'extra help', so loop here
+      do {
+        nameptr = strtok_r(NULL, "\t", &saveptr);
+	helpptr = strtok_r(NULL, "\t", &saveptr);
+      } while (working && nameptr && helpptr && (anchor_word && (strncmp(anchor_word, nameptr, strlen(anchor_word)))));
+    } while (working && nameptr && helpptr);
+    free_z(working);
   } else if (lastchar == CTRL('I')) {
     if (get_completions) {
       (*get_completions)(cli, optarg->name, next_word, comphelp);
