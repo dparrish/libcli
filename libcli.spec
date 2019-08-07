@@ -67,6 +67,13 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Aug 7 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.1-1
+- Rework how help text is formatted to allow for word wrapping
+  and embedded newlines
+- Rework optarg help text to allow the optarg to have specific
+  help messages based on user input - look at clitest at the
+  'shape' optarg examples.
+
 * Wed Jul 30 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.1-1
 - Bump version
 - Renamed cli_int_[help|history|exit|quit|enable|disable] to
