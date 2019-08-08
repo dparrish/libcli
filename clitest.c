@@ -184,16 +184,15 @@ int cmd_perimeter(struct cli_def *cli, const char *command, char *argv[], int ar
   int i = 1, numSides = 0;
   int perimeter = 0;
   int verbose_count = 0;
-  char *verboseArg = NULL;
+  char *verboseArg;
   char *shapeName = NULL;
 
   cli_print(cli, "perimeter callback, with %d args", argc);
   for (; optargs; optargs = optargs->next) cli_print(cli, "%d, %s=%s", i++, optargs->name, optargs->value);
 
-  if ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg))) {
-    do {
-      verbose_count++;
-    } while ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg)));
+  verboseArg = NULL;
+  while ((verboseArg = cli_get_optarg_value(cli, "verbose", verboseArg))) {
+    verbose_count++;
   }
   cli_print(cli, "verbose argument was seen  %d times", verbose_count);
 
@@ -367,17 +366,17 @@ void run_child(int x) {
   // Register some commands/subcommands to demonstrate opt/arg and buildmode operations
 
   c = cli_register_command(cli, NULL, "perimeter", cmd_perimeter, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                           "Calculate perimeter of polygon");
+                           "Calculate perimeter of polygon\nhas embedded newline\nand_a_really_long_line_that_is_much_longer_than_80_columns_to_show_that_wrap_case");
   cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                       "Set transparent flag", NULL, NULL, NULL);
   cli_register_optarg(c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      "Set transparent flag", NULL, NULL, NULL);
+                      "Set verbose flagwith some humongously long string \nwithout any embedded newlines in it to test with", NULL, NULL, NULL);
   cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
                       color_completor, color_validator, NULL);
   cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL, NULL,
                       check1_validator, NULL);
   cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      "Specify shape to calclate perimeter for", shape_completor, shape_validator,
+                      "Specify shape(shows subtext on help)\ttriangle\tSpecify a triangle\trectangle\tspecify a rectangle", shape_completor, shape_validator,
                       shape_transient_eval);
   cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE,
                       "Specify side 1 length", NULL, side_length_validator, NULL);

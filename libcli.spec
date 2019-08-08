@@ -1,7 +1,7 @@
-Version: 1.10.0
+Version: 1.10.1
 Summary: Cisco-like telnet command-line library
 Name: libcli
-Release: 2
+Release: 1
 License: LGPL
 Group: Library/Communication
 Source: %{name}-%{version}.tar.gz
@@ -67,6 +67,24 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Aug 7 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.1-1
+- Rework how help text is formatted to allow for word wrapping
+  and embedded newlines
+- Rework how 'buildmode' is show for help messages so it uses
+  a single '*' as the first char of the help text.
+- Rework optarg help text to allow the optarg to have specific
+  help messages based on user input - look at clitest at the
+  'shape' optarg examples.
+
+* Wed Jul 30 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.1-1
+- Bump version
+- Renamed cli_int_[help|history|exit|quit|enable|disable] to
+  same routine minut '_int_', and exposed in libcli.h.  Retained
+  old command pointing to new command for backward compatability
+- Fix coerner case in buildmode where no extra settings specified
+  and user enters 'exit'
+- Rename buildmode 'exit' command to 'execute' based on feedback
+
 * Tue Jul 23 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.0-2
 - Fix spec file and rpm build issues
 - Fix 2 memory leaks (tab completion and help formatting)
