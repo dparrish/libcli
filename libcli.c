@@ -166,7 +166,7 @@ static int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pi
 inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 static void cli_int_free_pipeline(struct cli_pipeline *pipeline);
 static void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
-static void cli_int_wrap_help_line (char *nameptr, char *helpptr, struct cli_comphelp *comphelp) ;
+static void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp);
 
 static ssize_t _write(int fd, const void *buf, size_t count) {
   size_t written = 0;
@@ -862,9 +862,8 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
     }
 
     if (lastchar == '?') {
-      
       if (asprintf(&strptr, "  %-20s ", c->command) != -1) {
-        cli_int_wrap_help_line (strptr, c->help, comphelp);
+        cli_int_wrap_help_line(strptr, c->help, comphelp);
         free_z(strptr);
       }
     } else {
@@ -2836,7 +2835,7 @@ int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline)
  *  Attemp quick dirty wrapping of helptext taking into account the offset from name, embedded
  *  cr/lf in helptext, and trying to split on last white-text before the margin
  */
-void cli_int_wrap_help_line (char *nameptr, char *helpptr, struct cli_comphelp *comphelp) {
+void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp) {
   int maxwidth = 80;  // temporary assumption, to be fixed later when libcli 'understands' screen dimensions
   int availwidth;
   int namewidth;
@@ -2859,7 +2858,7 @@ void cli_int_wrap_help_line (char *nameptr, char *helpptr, struct cli_comphelp *
     if (toprint > availwidth) {
       toprint = availwidth;
       while ((toprint>=0) && !isspace(helpptr[toprint])) toprint--;
-      if ( toprint < 0) {
+      if (toprint < 0) {
         // if we backed up and found no whitespace, dump as much as we can
 	toprint = availwidth;
       }
@@ -2867,17 +2866,16 @@ void cli_int_wrap_help_line (char *nameptr, char *helpptr, struct cli_comphelp *
     if ( (crlf = strpbrk(helpptr,"\n\r"))) {
       // crlf is a pointer - see if it is 'before' the toprint index
       if ((crlf-helpptr) < toprint) {
-        // ok, crlf is before the wrap, us it
+        // ok, crlf is before the wrap, so have line break here.
         toprint = (crlf-helpptr);
       }
     }
     
     if (asprintf(&line, "%*.*s%.*s", namewidth, namewidth, nameptr, toprint, helpptr) < 0) break;
     cli_add_comphelp_entry(comphelp, line);
-    if (nameptr != emptystring) {
-      nameptr = emptystring;
-    }
     free_z(line);
+
+    nameptr = emptystring;
     helpptr += toprint;
     // advance to first non whitespace
     while (helpptr && isspace(*helpptr)) helpptr++;
@@ -3003,7 +3001,7 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
       // we may not need to show all off the 'extra help', so loop here
       do {
         nameptr = strtok_r(NULL, "\t", &saveptr);
-	helpptr = strtok_r(NULL, "\t", &saveptr);
+        helpptr = strtok_r(NULL, "\t", &saveptr);
       } while (working && nameptr && helpptr && (anchor_word && (strncmp(anchor_word, nameptr, strlen(anchor_word)))));
     } while (working && nameptr && helpptr);
     free_z(working);
