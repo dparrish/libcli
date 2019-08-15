@@ -376,8 +376,10 @@ void run_child(int x) {
   cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL, NULL,
                       check1_validator, NULL);
   cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      "Specify shape(shows subtext on help)\ttriangle\tSpecify a triangle\trectangle\tspecify a rectangle", shape_completor, shape_validator,
-                      shape_transient_eval);
+                      "Specify shape(shows subtext on help)", shape_completor, shape_validator, shape_transient_eval);
+  cli_optarg_addhelp(c, "shape", "triangle", "specify a triangle");
+  cli_optarg_addhelp(c, "shape", "rectangle", "pecify a rectangle");
+
   cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE,
                       "Specify side 1 length", NULL, side_length_validator, NULL);
   cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,
