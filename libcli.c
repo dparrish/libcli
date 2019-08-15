@@ -2095,6 +2095,23 @@ void cli_free_optarg(struct cli_optarg *optarg) {
   free_z(optarg);
 }
 
+int cli_optarg_addhelp(struct cli_command *cmd, const char *optargname, const char *helpname, const char *helptext) {
+  char *tstr;
+  struct cli_optarg *optarg;
+  
+  for (optarg = cmd->optargs; optarg && !strcmp(optarg->name, optargname); optarg = optarg->next) ;
+  
+  // put a vertical tab (\v), the new helpname, a horizontal tab (\t), and then the new help text
+  if ((!optarg) || (asprintf(&tstr,"%s\v%s\t%s" , optarg->help, helpname, helptext) == -1)) {
+    return CLI_ERROR;
+  } else {
+    free(optarg->help);
+    optarg->help = tstr;
+  }
+  return CLI_OK;
+}
+
+
 int cli_register_optarg(struct cli_command *cmd, const char *name, int flags, int privilege, int mode, const char *help,
                         int (*get_completions)(struct cli_def *cli, const char *, const char *, struct cli_comphelp *),
                         int (*validator)(struct cli_def *cli, const char *, const char *),
@@ -2860,7 +2877,7 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
       while ((toprint>=0) && !isspace(helpptr[toprint])) toprint--;
       if (toprint < 0) {
         // if we backed up and found no whitespace, dump as much as we can
-	toprint = availwidth;
+        toprint = availwidth;
       }
     }  // see if we might have an embedded carriage return or line feed
     if ( (crlf = strpbrk(helpptr,"\n\r"))) {
@@ -2943,11 +2960,11 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
   if (lastchar == '?') {
     /*
      *  Note - help is a bit complex, and we could optimize it.  But it isn't done often,
-     *  so we're always going to do it on the fly.  Help output will consist of a 'name' and a 'text' 
-     *  field and some formatting.  The 'help' member of an optarg is a single string, that may contain
-     *  both embedded tabs and newlines.  The tab characters (and end-of-string) are used as delimiters.
-     *  On the first pass through the string the 'name' will be the name of the optarg, and the 'text'
-     *  will be the first field.  There after we pull name/text delimited pairs until nothing is left.
+     *  so we're always going to do it on the fly.  
+     *  Help will consist of '\v' separated lines.  Each line except the first is also '\t' 
+     *  separated into the name/text fields.  If a line does not have a '\t' separated then the
+     *  name will be the name of the optarg, and the help will be that entire line.  The *first*
+     *  does get some tweaks to how the name and help is displayed.
      *  The first pass through will be indented 2 spaces on the left with the formated name occupying 
      *  20 spaces (expanding if more than 20).  If the command is a 'buildmode' command the first 
      *  character of the 'text' will be an asterisk.  The 'rest' of the line (assuming an 80 character '
@@ -2958,29 +2975,32 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
     char *working = NULL;
     char *nameptr = NULL;
     char *helpptr = NULL;
-    char *saveptr = NULL;  
+    char *lineptr = NULL;
+    char *savelineptr = NULL;
+    char *savetabptr = NULL;  
     char *tname = NULL; 
     int indent = 2;
     int helplen;
     char emptystring[] = "";
-    // print out actual text into a working buffer that we can then call 'strtok_r' on
 
+    /*
+     * Print out actual text into a working buffer that we can then call 'strtok_r' on it.  This lets
+     * us prepend some optional fields nice and easily.  At this point it is one big string.
+     */
     helplen = asprintf(&working, "%s%s%s%s%s",
-    	(optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
-	(help_insert) ? "enter '" : "",
-	(help_insert) ? optarg->name : "",
-	(help_insert) ? "' to set " : "",
-	(help_insert) ? optarg->name : optarg->help);
+        (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
+        (help_insert) ? "enter '" : "",
+        (help_insert) ? optarg->name : "",
+        (help_insert) ? "' to set " : "",
+        (help_insert) ? optarg->name : optarg->help);
 
-    // preload out nptr,hptr fields;
+    // pull the first line
+    helpptr = strtok_r(working, "\v", &savelineptr);
     nameptr = optarg->name;
 
     if (helplen < 0) {
       helpptr = emptystring;
       working = NULL;
-    }
-    else {
-      helpptr = strtok_r(working, "\t", &saveptr);
     }
       
     // break things up into tab separated entities - always show the first entry
@@ -3000,10 +3020,13 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
       
       // we may not need to show all off the 'extra help', so loop here
       do {
-        nameptr = strtok_r(NULL, "\t", &saveptr);
-        helpptr = strtok_r(NULL, "\t", &saveptr);
-      } while (working && nameptr && helpptr && (anchor_word && (strncmp(anchor_word, nameptr, strlen(anchor_word)))));
-    } while (working && nameptr && helpptr);
+        lineptr = strtok_r(NULL, "\v", &savelineptr); 
+        if (lineptr) {
+          nameptr = strtok_r(lineptr, "\t", &savetabptr);
+          helpptr = strtok_r(NULL, "\t", &savetabptr);
+        }
+      } while (lineptr && nameptr && helpptr && (anchor_word && (strncmp(anchor_word, nameptr, strlen(anchor_word)))));
+    } while (lineptr && nameptr && helpptr);
     free_z(working);
   } else if (lastchar == CTRL('I')) {
     if (get_completions) {
