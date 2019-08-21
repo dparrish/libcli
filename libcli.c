@@ -2688,9 +2688,19 @@ int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline
   cli->pipeline = pipeline;
 
   cli->found_optargs = NULL;
+  
+  // If the line is totally empty this is not an error, but we need to return
+  // CLI_ERROR to avoid processing it
+  if (pipeline->num_words == 0) return CLI_ERROR;
+  
   for (i = 0; i < pipeline->num_stages; i++) {
+    // And double check each stage for an empty line - this *is* an error
+    if (pipeline->stage[i].num_words == 0) {
+      cli_error(cli, "Empty command given");
+      return CLI_ERROR;
+    }
+    
     // In 'buildmode' we only have one pipeline, but we need to recall if we had started with any optargs
-
     if (cli->buildmode && i == 0)
       command_type = CLI_BUILDMODE_COMMAND;
     else if (i > 0)
