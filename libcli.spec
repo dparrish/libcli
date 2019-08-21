@@ -67,7 +67,7 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
-* Wed Aug 21 2019 Rob Sanders <rsanders@forcepoint.com> 10.10.1-2
+* Wed Aug 21 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.1-2
 - Bug for processing an empty line, or empty command after a pipe character
 
 * Wed Aug 7 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.1-1
