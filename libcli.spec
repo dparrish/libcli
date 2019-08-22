@@ -1,4 +1,4 @@
-Version: 1.10.1
+Version: 1.10.2
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,10 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Aug 21 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.2-1
+- Bug for processing an empty line, or empty command after a pipe character
+- Bump version to 1.10.2-1
+
 * Wed Aug 7 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.1-1
 - Rework how help text is formatted to allow for word wrapping
   and embedded newlines
