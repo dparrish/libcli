@@ -114,6 +114,7 @@ struct cli_command {
   int (*filter)(struct cli_def *cli, const char *string, void *data);
   int (*init)(struct cli_def *cli, int, char **, struct cli_filter *filt);
   int command_type;
+  int flags;
 };
 
 struct cli_comphelp {

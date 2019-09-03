@@ -146,12 +146,12 @@ static int cli_int_unregister_command_core(struct cli_def *cli, const char *comm
 static int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *command) __attribute__((unused));
 static struct cli_command *cli_int_register_buildmode_command(
     struct cli_def *cli, struct cli_command *parent, const char *command,
-    int (*callback)(struct cli_def *cli, const char *, char **, int), int privilege, int mode, const char *help);
+    int (*callback)(struct cli_def *cli, const char *, char **, int), int flags, int privilege, int mode, const char *help);
 static int cli_int_buildmode_cmd_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
 static int cli_int_buildmode_flag_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
 static int cli_int_buildmode_flag_multiple_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
 static int cli_int_buildmode_cancel_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
-static int cli_int_buildmode_exit_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
+static int cli_int_buildmode_execute_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
 static int cli_int_buildmode_show_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
 static int cli_int_buildmode_unset_cback(struct cli_def *cli, const char *command, char *argv[], int argc);
 static int cli_int_buildmode_unset_completor(struct cli_def *cli, const char *name, const char *word,
@@ -815,7 +815,10 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
   int command_type;
   struct cli_pipeline *pipeline = NULL;
   struct cli_pipeline_stage *stage;
-
+  char delims[][2][2] = { { ""  ,  ""  } ,    // No extra chars required for text
+                          { "[" ,  "]" },     // Enclose text with '[]
+		        };
+  int delimIdx;
   if (!(pipeline = cli_int_generate_pipeline(cli, command))) goto out;
 
   stage = &pipeline->stage[pipeline->num_stages - 1];
@@ -833,6 +836,7 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
 
   for (c = cli->commands, i = 0; c && i < stage->num_words; c = n) {
     char *strptr = NULL;
+    char *nameptr = NULL;
     n = c->next;
 
     if (c->command_type != command_type) continue;
@@ -862,9 +866,22 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
     }
 
     if (lastchar == '?') {
-      if (asprintf(&strptr, "  %-20s ", c->command) != -1) {
-        cli_int_wrap_help_line(strptr, c->help, comphelp);
-        free_z(strptr);
+      delimIdx = 0;  // assume no '[]' required
+      
+      // Note that buildmode commands need to see if that command is some optinal value
+      
+      if (command_type == CLI_BUILDMODE_COMMAND) {
+        if (c->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) {
+          delimIdx = 1;
+        }
+      }
+      if (asprintf(&nameptr, "%s%s%s" , delims[delimIdx][0], c->command, delims[delimIdx][1]) != -1 )
+      {
+        if (asprintf(&strptr, "  %-20s %s ", nameptr, c->command) != -1) {
+        	cli_int_wrap_help_line(strptr, c->help, comphelp);
+        	free_z(strptr);
+      	}
+	free(nameptr);
       }
     } else {
       cli_add_comphelp_entry(comphelp, c->command);
@@ -2099,7 +2116,7 @@ int cli_optarg_addhelp(struct cli_command *cmd, const char *optargname, const ch
   char *tstr;
   struct cli_optarg *optarg;
   
-  for (optarg = cmd->optargs; optarg && !strcmp(optarg->name, optargname); optarg = optarg->next) ;
+  for (optarg = cmd->optargs; optarg && strcmp(optarg->name, optargname); optarg = optarg->next) ;
   
   // put a vertical tab (\v), the new helpname, a horizontal tab (\t), and then the new help text
   if ((!optarg) || (asprintf(&tstr,"%s\v%s\t%s" , optarg->help, helpname, helptext) == -1)) {
@@ -2305,7 +2322,7 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
       continue;
     else if (optarg->flags & (CLI_CMD_OPTIONAL_ARGUMENT | CLI_CMD_ARGUMENT)) {
       if ((c = cli_int_register_buildmode_command(cli, NULL, optarg->name, cli_int_buildmode_cmd_cback,
-                                                  optarg->privilege, cli->mode, optarg->help))) {
+                                                  optarg->flags, optarg->privilege, cli->mode, optarg->help))) {
         cli_register_optarg(c, optarg->name, CLI_CMD_ARGUMENT | (optarg->flags & CLI_CMD_OPTION_MULTIPLE),
                             optarg->privilege, cli->mode, optarg->help, optarg->get_completions, optarg->validator,
                             NULL);
@@ -2316,13 +2333,13 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
     } else {
       if (optarg->flags & CLI_CMD_OPTION_MULTIPLE) {
         if (!cli_int_register_buildmode_command(cli, NULL, optarg->name, cli_int_buildmode_flag_multiple_cback,
-                                                optarg->privilege, cli->mode, optarg->help)) {
+                                                optarg->flags, optarg->privilege, cli->mode, optarg->help)) {
           rc = CLI_BUILDMODE_ERROR;
           goto out;
         }
       } else {
         if (!cli_int_register_buildmode_command(cli, NULL, optarg->name, cli_int_buildmode_flag_cback,
-                                                optarg->privilege, cli->mode, optarg->help)) {
+                                                optarg->flags, optarg->privilege, cli->mode, optarg->help)) {
           rc = CLI_BUILDMODE_ERROR;
           goto out;
         }
@@ -2331,13 +2348,13 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   }
   cli->buildmode->cname = strdup(cli_command_name(cli, stage->command));
   // And lastly four 'always there' commands to cancel current mode and to execute the command, show settings, and unset
-  cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, PRIVILEGE_UNPRIVILEGED,
+  cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, 0, PRIVILEGE_UNPRIVILEGED,
                                      cli->mode, "Cancel command");
-  cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_exit_cback, PRIVILEGE_UNPRIVILEGED, cli->mode,
+  cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_execute_cback, 0, PRIVILEGE_UNPRIVILEGED, cli->mode,
                                      "Execute command");
-  cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, PRIVILEGE_UNPRIVILEGED, cli->mode,
+  cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, 0, PRIVILEGE_UNPRIVILEGED, cli->mode,
                                      "Show current settings");
-  c = cli_int_register_buildmode_command(cli, NULL, "unset", cli_int_buildmode_unset_cback, PRIVILEGE_UNPRIVILEGED,
+  c = cli_int_register_buildmode_command(cli, NULL, "unset", cli_int_buildmode_unset_cback, 0, PRIVILEGE_UNPRIVILEGED,
                                          cli->mode, "Unset a setting");
   cli_register_optarg(c, "setting", CLI_CMD_ARGUMENT | CLI_CMD_DO_NOT_RECORD, PRIVILEGE_UNPRIVILEGED, cli->mode,
                       "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator, NULL);
@@ -2354,12 +2371,13 @@ int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *comman
 struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, struct cli_command *parent,
                                                        const char *command,
                                                        int (*callback)(struct cli_def *cli, const char *, char **, int),
-                                                       int privilege, int mode, const char *help) {
+                                                       int flags, int privilege, int mode, const char *help) {
   struct cli_command *c;
 
   if (!command) return NULL;
   if (!(c = calloc(sizeof(struct cli_command), 1))) return NULL;
 
+  c->flags = flags;
   c->callback = callback;
   c->next = NULL;
   if (!(c->command = strdup(command))) {
@@ -2509,7 +2527,7 @@ int cli_int_buildmode_cancel_cback(struct cli_def *cli, const char *command, cha
   return rc;
 }
 
-int cli_int_buildmode_exit_cback(struct cli_def *cli, const char *command, char *argv[], int argc) {
+int cli_int_buildmode_execute_cback(struct cli_def *cli, const char *command, char *argv[], int argc) {
   int rc = CLI_BUILDMODE_EXIT;
 
   if (argc > 0) {
@@ -2792,7 +2810,8 @@ struct cli_pipeline *cli_int_generate_pipeline(struct cli_def *cli, const char *
       if (cli->buildmode) {
         // Can't allow filters in buildmode commands
         cli_int_free_pipeline(pipeline);
-        return NULL;
+        cli_error(cli, "\nPipelines are not allowed in buildmode");
+	return NULL;
       }
       stage->stage_num = pipeline->num_stages;
       stage++;
@@ -2999,7 +3018,7 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
      */
     helplen = asprintf(&working, "%s%s%s%s%s",
         (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
-        (help_insert) ? "enter '" : "",
+        (help_insert) ? "type '" : "",
         (help_insert) ? optarg->name : "",
         (help_insert) ? "' to set " : "",
         (help_insert) ? optarg->name : optarg->help);
