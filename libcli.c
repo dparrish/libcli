@@ -167,7 +167,14 @@ inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipe
 static void cli_int_free_pipeline(struct cli_pipeline *pipeline);
 static void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
 static void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp);
-
+  
+static char DELIM_OPT_START[] = "[";
+static char DELIM_OPT_END[] = "]";
+static char DELIM_ARG_START[] = "<";
+static char DELIM_ARG_END[] = ">";
+static char DELIM_NONE[] = "";
+  
+  
 static ssize_t _write(int fd, const void *buf, size_t count) {
   size_t written = 0;
   ssize_t thisTime = 0;
@@ -815,10 +822,9 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
   int command_type;
   struct cli_pipeline *pipeline = NULL;
   struct cli_pipeline_stage *stage;
-  char delims[][2][2] = { { ""  ,  ""  } ,    // No extra chars required for text
-                          { "[" ,  "]" },     // Enclose text with '[]
-		        };
-  int delimIdx;
+  char *delim_start = DELIM_NONE ;
+  char *delim_end = DELIM_NONE;
+
   if (!(pipeline = cli_int_generate_pipeline(cli, command))) goto out;
 
   stage = &pipeline->stage[pipeline->num_stages - 1];
@@ -866,16 +872,18 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
     }
 
     if (lastchar == '?') {
-      delimIdx = 0;  // assume no '[]' required
+      delim_start = DELIM_NONE;
+      delim_end = DELIM_NONE;
       
       // Note that buildmode commands need to see if that command is some optinal value
       
       if (command_type == CLI_BUILDMODE_COMMAND) {
         if (c->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) {
-          delimIdx = 1;
+          delim_start = DELIM_OPT_START;
+	  delim_end = DELIM_OPT_END;
         }
       }
-      if (asprintf(&nameptr, "%s%s%s" , delims[delimIdx][0], c->command, delims[delimIdx][1]) != -1 )
+      if (asprintf(&nameptr, "%s%s%s" , delim_start, c->command, delim_end) != -1 )
       {
         if (asprintf(&strptr, "  %-20s %s ", nameptr, c->command) != -1) {
         	cli_int_wrap_help_line(strptr, c->help, comphelp);
@@ -2927,12 +2935,6 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
     while (helpptr && isspace(*helpptr)) helpptr++;
   } while (*helpptr);
 }
-
-static char DELIM_OPT_START[] = "[";
-static char DELIM_OPT_END[] = "]";
-static char DELIM_ARG_START[] = "<";
-static char DELIM_ARG_END[] = ">";
-static char DELIM_NONE[] = "";
 
 static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *optarg, struct cli_comphelp *comphelp,
                                     int num_candidates, const char lastchar, const char *anchor_word,
