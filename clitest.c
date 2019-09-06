@@ -249,6 +249,7 @@ int verbose_validator(struct cli_def *cli, const char *name, const char *value) 
   return CLI_OK;
 }
 
+// note that we're setting a 'custom' optarg tag/value pair as an example here
 int shape_transient_eval(struct cli_def *cli, const char *name, const char *value) {
   printf("shape_transient_eval called with <%s>\n", value);
   if (!strcmp(value, "rectangle")) {
@@ -343,7 +344,7 @@ void run_child(int x) {
   cli_regular_interval(cli, 5);
 
   // set 60 second idle timeout
-  cli_set_idle_timeout_callback(cli, 60, idle_timeout);
+//  cli_set_idle_timeout_callback(cli, 60, idle_timeout);
   cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
