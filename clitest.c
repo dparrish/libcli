@@ -266,7 +266,7 @@ int shape_transient_eval(struct cli_def *cli, const char *name, const char *valu
 
 const char *KnownColors[] = {"black",    "white",    "gray",      "red",        "blue",
                              "green",    "lightred", "lightblue", "lightgreen", "darkred",
-                             "darkblue", "darkgree", "lavender",  "yellow",     NULL};
+                             "darkblue", "darkgreen", "lavender",  "yellow",     NULL};
 
 int color_completor(struct cli_def *cli, const char *name, const char *word, struct cli_comphelp *comphelp) {
   // Attempt to show matches against the following color strings
@@ -373,6 +373,21 @@ void run_child(int x) {
                       "Set verbose flagwith some humongously long string \nwithout any embedded newlines in it to test with", NULL, NULL, NULL);
   cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
                       color_completor, color_validator, NULL);
+  cli_optarg_addhelp(c, "color", "black" , "the color 'black'");
+  cli_optarg_addhelp(c, "color", "white" , "the color 'white'");
+  cli_optarg_addhelp(c, "color", "gray" , "the color 'gray'");
+  cli_optarg_addhelp(c, "color", "red" , "the color 'red'");
+  cli_optarg_addhelp(c, "color", "blue" , "the color 'blue'");
+  cli_optarg_addhelp(c, "color", "green" , "the color 'green'");
+  cli_optarg_addhelp(c, "color", "lightred" , "the color 'lightred'");
+  cli_optarg_addhelp(c, "color", "lightblue" , "the color 'lightblue'");
+  cli_optarg_addhelp(c, "color", "lightgreen" , "the color 'lightgreen'");
+  cli_optarg_addhelp(c, "color", "darkred" , "the color 'darkred'");
+  cli_optarg_addhelp(c, "color", "darkblue" , "the color 'darkblue'");
+  cli_optarg_addhelp(c, "color", "darkgreen" , "the color 'darkgreen'");
+  cli_optarg_addhelp(c, "color", "lavender" , "the color 'lavender'");
+  cli_optarg_addhelp(c, "color", "yellow" , "the color 'yellow'");
+   
   cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL, NULL,
                       check1_validator, NULL);
   cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,

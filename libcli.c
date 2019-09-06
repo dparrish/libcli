@@ -2941,7 +2941,6 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
                                     const char *next_word) {
   int help_insert = 0;
   char *delim_start = DELIM_NONE;
-
   char *delim_end = DELIM_NONE;
   int (*get_completions)(struct cli_def *, const char *, const char *, struct cli_comphelp *) = NULL;
   char *tptr = NULL;
@@ -3056,7 +3055,7 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
           nameptr = strtok_r(lineptr, "\t", &savetabptr);
           helpptr = strtok_r(NULL, "\t", &savetabptr);
         }
-      } while (lineptr && nameptr && helpptr && (anchor_word && (strncmp(anchor_word, nameptr, strlen(anchor_word)))));
+      } while (lineptr && nameptr && helpptr && (next_word && (strncmp(next_word, nameptr, strlen(next_word)))));
     } while (lineptr && nameptr && helpptr);
     free_z(working);
   } else if (lastchar == CTRL('I')) {
