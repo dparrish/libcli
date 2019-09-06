@@ -344,7 +344,7 @@ void run_child(int x) {
   cli_regular_interval(cli, 5);
 
   // set 60 second idle timeout
-//  cli_set_idle_timeout_callback(cli, 60, idle_timeout);
+  cli_set_idle_timeout_callback(cli, 60, idle_timeout);
   cli_register_command(cli, NULL, "test", cmd_test, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simple", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
   cli_register_command(cli, NULL, "simon", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL);
