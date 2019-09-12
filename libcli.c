@@ -2122,11 +2122,8 @@ void cli_free_optarg(struct cli_optarg *optarg) {
   free_z(optarg);
 }
 
-int cli_optarg_addhelp(struct cli_command *cmd, const char *optargname, const char *helpname, const char *helptext) {
+int cli_optarg_addhelp(struct cli_optarg *optarg, const char *helpname, const char *helptext) {
   char *tstr;
-  struct cli_optarg *optarg;
-  
-  for (optarg = cmd->optargs; optarg && strcmp(optarg->name, optargname); optarg = optarg->next) ;
   
   // put a vertical tab (\v), the new helpname, a horizontal tab (\t), and then the new help text
   if ((!optarg) || (asprintf(&tstr,"%s\v%s\t%s" , optarg->help, helpname, helptext) == -1)) {
@@ -2139,19 +2136,19 @@ int cli_optarg_addhelp(struct cli_command *cmd, const char *optargname, const ch
 }
 
 
-int cli_register_optarg(struct cli_command *cmd, const char *name, int flags, int privilege, int mode, const char *help,
+struct cli_optarg *cli_register_optarg(struct cli_command *cmd, const char *name, int flags, int privilege, int mode, const char *help,
                         int (*get_completions)(struct cli_def *cli, const char *, const char *, struct cli_comphelp *),
                         int (*validator)(struct cli_def *cli, const char *, const char *),
                         int (*transient_mode)(struct cli_def *cli, const char *, const char *)) {
-  struct cli_optarg *optarg;
+  struct cli_optarg *optarg = NULL;
   struct cli_optarg *lastopt = NULL;
   struct cli_optarg *ptr = NULL;
   int retval = CLI_ERROR;
-
+  
   // Name must not already exist with this priv/mode
   for (ptr = cmd->optargs, lastopt = NULL; ptr; lastopt = ptr, ptr = ptr->next) {
     if (!strcmp(name, ptr->name) && ptr->mode == mode && ptr->privilege == privilege) {
-      return CLI_ERROR;
+      goto CLEANUP;
     }
   }
   if (!(optarg = calloc(sizeof(struct cli_optarg), 1))) goto CLEANUP;
@@ -2175,8 +2172,9 @@ int cli_register_optarg(struct cli_command *cmd, const char *name, int flags, in
 CLEANUP:
   if (retval != CLI_OK) {
     cli_free_optarg(optarg);
+    optarg = NULL;
   }
-  return retval;
+  return optarg;
 }
 
 int cli_unregister_optarg(struct cli_command *cmd, const char *name) {
@@ -2509,6 +2507,7 @@ void cli_int_buildmode_reset_unset_help(struct cli_def *cli) {
        * cli_optarg_addhelp() calls a few lines down
        */
       if ((endOfMainHelp = strchr(optarg->help,'\v'))) *endOfMainHelp = '\0'; 
+            
       for (optarg_pair = cli->found_optargs; optarg_pair; optarg_pair = optarg_pair->next) {
         // Only show vars that are also current 'commands'
         struct cli_command *c = cli->commands;
@@ -2517,7 +2516,7 @@ void cli_int_buildmode_reset_unset_help(struct cli_def *cli) {
           if (!strcmp(c->command, optarg_pair->name)) {
 	    char *tmphelp;
             if (asprintf(&tmphelp, "unset %s", optarg_pair->name)>=0) {
-	      cli_optarg_addhelp(cmd, "setting", optarg_pair->name, tmphelp);
+	      cli_optarg_addhelp(optarg, optarg_pair->name, tmphelp);
               free_z(tmphelp);
 	    }
           }

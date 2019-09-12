@@ -327,6 +327,7 @@ int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const
 void run_child(int x) {
   struct cli_command *c;
   struct cli_def *cli;
+  struct cli_optarg *o;
 
   // Prepare a small user context
   char mymessage[] = "I contain user data!";
@@ -372,29 +373,29 @@ void run_child(int x) {
                       "Set transparent flag", NULL, NULL, NULL);
   cli_register_optarg(c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                       "Set verbose flagwith some humongously long string \nwithout any embedded newlines in it to test with", NULL, NULL, NULL);
-  cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
+  o = cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
                       color_completor, color_validator, NULL);
-  cli_optarg_addhelp(c, "color", "black" , "the color 'black'");
-  cli_optarg_addhelp(c, "color", "white" , "the color 'white'");
-  cli_optarg_addhelp(c, "color", "gray" , "the color 'gray'");
-  cli_optarg_addhelp(c, "color", "red" , "the color 'red'");
-  cli_optarg_addhelp(c, "color", "blue" , "the color 'blue'");
-  cli_optarg_addhelp(c, "color", "green" , "the color 'green'");
-  cli_optarg_addhelp(c, "color", "lightred" , "the color 'lightred'");
-  cli_optarg_addhelp(c, "color", "lightblue" , "the color 'lightblue'");
-  cli_optarg_addhelp(c, "color", "lightgreen" , "the color 'lightgreen'");
-  cli_optarg_addhelp(c, "color", "darkred" , "the color 'darkred'");
-  cli_optarg_addhelp(c, "color", "darkblue" , "the color 'darkblue'");
-  cli_optarg_addhelp(c, "color", "darkgreen" , "the color 'darkgreen'");
-  cli_optarg_addhelp(c, "color", "lavender" , "the color 'lavender'");
-  cli_optarg_addhelp(c, "color", "yellow" , "the color 'yellow'");
+  cli_optarg_addhelp(o, "black" , "the color 'black'");
+  cli_optarg_addhelp(o, "white" , "the color 'white'");
+  cli_optarg_addhelp(o, "gray" , "the color 'gray'");
+  cli_optarg_addhelp(o, "red" , "the color 'red'");
+  cli_optarg_addhelp(o, "blue" , "the color 'blue'");
+  cli_optarg_addhelp(o, "green" , "the color 'green'");
+  cli_optarg_addhelp(o, "lightred" , "the color 'lightred'");
+  cli_optarg_addhelp(o, "lightblue" , "the color 'lightblue'");
+  cli_optarg_addhelp(o, "lightgreen" , "the color 'lightgreen'");
+  cli_optarg_addhelp(o, "darkred" , "the color 'darkred'");
+  cli_optarg_addhelp(o, "darkblue" , "the color 'darkblue'");
+  cli_optarg_addhelp(o, "darkgreen" , "the color 'darkgreen'");
+  cli_optarg_addhelp(o, "lavender" , "the color 'lavender'");
+  cli_optarg_addhelp(o, "yellow" , "the color 'yellow'");
    
   cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL, NULL,
                       check1_validator, NULL);
-  cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+  o = cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                       "Specify shape(shows subtext on help)", shape_completor, shape_validator, shape_transient_eval);
-  cli_optarg_addhelp(c, "shape", "triangle", "specify a triangle");
-  cli_optarg_addhelp(c, "shape", "rectangle", "pecify a rectangle");
+  cli_optarg_addhelp(o, "triangle", "specify a triangle");
+  cli_optarg_addhelp(o, "rectangle", "specify a rectangle");
 
   cli_register_optarg(c, "side_1", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_TRIANGLE,
                       "Specify side 1 length", NULL, side_length_validator, NULL);
