@@ -77,6 +77,11 @@ rm -rf $RPM_BUILD_ROOT
 - Add support so the buildmode unset command has dynamic help messages
   depending on what has already been set
 - Prevent spot check optargs from appearing in buildmode
+- BREAKING API CHANGE - the 'cli_register_optarg()' function is now returning
+  a pointer to the newly added optarg or NULL instead of an integer 
+  return code.  This is to fix a design bug where it was difficult to 
+  use the new 'cli_optarg_addhelp()' function.  Only affects moving from
+  1.10.0 to 1.10.2 (1.10.1 was never released)
 
 * Tue Sep 3 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.2-1
 - Fix bug in cli_optarg_addhelp()
