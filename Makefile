@@ -11,7 +11,7 @@ PREFIX = /usr/local
 
 MAJOR = 1
 MINOR = 10
-REVISION = 0
+REVISION = 2
 LIB = libcli.so
 LIB_STATIC = libcli.a
 
