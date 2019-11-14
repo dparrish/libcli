@@ -1,4 +1,4 @@
-Version: 1.10.2
+Version: 1.10.3
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,13 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Thu Nov 14 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
+- Enhance how cli_parse_line handles quotes when parsine the command
+  line.  This includs mixed single/double quotes, embedded quoted 
+  substrings, and handling 'escaped' quotes using the '\' character.  
+- Ensure that buildmode preserves 'empty' strings
+  (ex: "", or '') when regenerating the cmdline after the user 'executes'
+  the command.
 * Fri Sep 7 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.2-1
 - Fix bug where 'extra help' added with cli_optarg_addhelp() were not 
   being displayed for optional argumenets

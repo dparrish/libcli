@@ -728,6 +728,22 @@ void cli_free_history(struct cli_def *cli) {
   }
 }
 
+static char *cli_int_return_newword(const char *start, const char *end) {
+  int len = end - start;
+  char *to = NULL;
+  char *newword=NULL;
+
+  // allocate space (including terminal NULL, then go through and deal with escaping characters as we copy them
+	
+  if (!(newword = calloc(len+1, 1))) return 0;
+  to = newword;
+  while (start != end) {
+    if (*start == '\\') start++;
+    else *to++ = *start++;
+  }
+  return newword;
+}
+
 static int cli_parse_line(const char *line, char *words[], int max_words) {
   int nwords = 0;
   const char *p = line;
@@ -743,21 +759,38 @@ static int cli_parse_line(const char *line, char *words[], int max_words) {
   }
 
   while (nwords < max_words - 1) {
-    if (!*p || *p == inquote || (word_start && !inquote && (isspace(*p) || *p == '|'))) {
+    if (*p == '\\' && *(p+1)) {
+      p+=2;  
+    }
+    
+    /* 
+     * a 'word' terminates at:
+     *   - end-of-string, whitespace (if not inside quotes)
+     *   - start of quoted section (if word_start != NULL)
+     *   - end of a quoted section
+     *   - whitespace/pipe unless inside quotes
+     */
+     
+    if (!*p || *p == inquote || (word_start && !inquote && (isspace(*p) || *p == '|' ))) {
+      
+      // if we have a word start, extract from there to this character dealing with escapes
       if (word_start) {
-        int len = p - word_start;
-
-        memcpy(words[nwords] = malloc(len + 1), word_start, len);
-        words[nwords++][len] = 0;
+	if (!(words[nwords++] = cli_int_return_newword(word_start, p))) return 0;
       }
 
+      // now figure out how to proceed 
+      
+      // if at end_of_string we're done
       if (!*p) break;
 
-      if (inquote) p++;  // Skip over trailing quote
-
+      // found matching quote, eat it
+      if (inquote) p++;  // Skip over trailing quote if we have one
       inquote = 0;
       word_start = 0;
-    } else if (*p == '"' || *p == '\'') {
+    } else if (!inquote && (*p == '"' || *p == '\'')) {
+      if (word_start && word_start != p) {
+	if (!(words[nwords++] = cli_int_return_newword(word_start, p))) return 0;
+      }
       inquote = *p++;
       word_start = p;
     } else {
@@ -2466,21 +2499,46 @@ char *cli_int_buildmode_extend_cmdline(char *cmdline, char *word) {
   char *cptr = NULL;
   size_t oldlen = strlen(cmdline);
   size_t wordlen = strlen(word);
-  int add_quotes = 0;
-
-  // Allocate enough space to hold the old string, a space, and the new string (including null terminator).
-  // Also include enough space for a quote around the string if it contains a whitespace character
-  if ((tptr = (char *)realloc(cmdline, oldlen + 1 + wordlen + 1 + 2))) {
-    strcat(tptr, " ");
-    for (cptr = word; *cptr; cptr++) {
-      if (isspace(*cptr)) {
-        add_quotes = 1;
-        break;
-      }
+  char quoteChar[2] = "";
+  
+  // by default we don't add quotes, but if the word is empty, we *must* to preserve that empty string
+  // we also need to quote it if there is a space in the word, or any unescaped quotes, so we'll have
+  // to walk the word....
+  cptr = word;
+  if (!wordlen) {
+    quoteChar[0] = '"';
+  }
+  for (cptr = word; *cptr; cptr++ ) {
+    if (*cptr=='\\' && *(cptr+1)) {
+      cptr++;  // skip over escapes blindly
     }
-    if (add_quotes) strcat(tptr, "'");
+    else if ((*cptr == ' ') && (quoteChar[0]=='\0')) 
+    {
+      // if we found a space we need quotes, select double unless we've already selected something
+      quoteChar[0] = '"';
+    }
+    else if (*cptr == '"')   
+    {
+      // if our first unescaped quote is a double, then we wrap the string in single quotes
+      quoteChar[0] = '\'';
+      break;
+    }
+    else if (*cptr == '\'') 
+    {
+      // if our first unescaped quote is a single, then we wrap the string in double quotes
+      quoteChar[0] = '"';
+      break;
+    }
+  }
+
+  // Allocate enough space to hold the old string, a space, possible quote, the new string,
+  // another possible quote, and the final null terminator).
+  
+  if ((tptr = (char *)realloc(cmdline, oldlen + 1 + 1 + wordlen + 1 + 1))) {
+    strcat(tptr, " ");
+    strcat(tptr, quoteChar);
     strcat(tptr, word);
-    if (add_quotes) strcat(tptr, "'");
+    strcat(tptr, quoteChar);
   }
   return tptr;
 }

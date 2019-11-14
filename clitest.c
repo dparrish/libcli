@@ -324,6 +324,18 @@ int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const
   return CLI_OK;
 }
 
+int cmd_string(struct cli_def *cli, const char *command, char *argv[], int argc) {
+  int i;
+  cli_print(cli, "Raw commandline was <%s>", cli->pipeline->cmdline);
+  cli_print(cli, "Value for text argument is <%s>", cli_get_optarg_value(cli, "text", NULL));
+  
+  cli_print(cli, "Found %d 'extra' arguments after 'text' argument was processed", argc);
+  for (i = 0 ; i != argc; i++) {
+    cli_print(cli, "  Extra arg %d = <%s>", i+1, argv[i]);
+  }
+  return CLI_OK;
+}
+
 void run_child(int x) {
   struct cli_command *c;
   struct cli_def *cli;
@@ -411,6 +423,14 @@ void run_child(int x) {
                       "Specify side 3 length", NULL, side_length_validator, NULL);
   cli_register_optarg(c, "side_4", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,
                       "Specify side 4 length", NULL, side_length_validator, NULL);
+
+  c = cli_register_command(cli, NULL, "string", cmd_string, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                           "string input argument testing");
+
+  cli_register_optarg(c, "buildmode", CLI_CMD_OPTIONAL_FLAG|CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                      "flag", NULL, NULL, NULL);
+  cli_register_optarg(c, "text", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                      "text string", NULL, NULL, NULL);
 
   // Set user context and its command
   cli_set_context(cli, (void *)&myctx);
