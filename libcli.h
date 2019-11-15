@@ -235,10 +235,11 @@ struct cli_command *cli_register_filter(struct cli_def *cli, const char *command
                                         const char *help);
 int cli_unregister_filter(struct cli_def *cli, const char *command);
 struct cli_optarg *cli_register_optarg(struct cli_command *cmd, const char *name, int flags, int priviledge, int mode,
-                        const char *help,
-                        int (*get_completions)(struct cli_def *cli, const char *, const char *, struct cli_comphelp *),
-                        int (*validator)(struct cli_def *cli, const char *, const char *),
-                        int (*transient_mode)(struct cli_def *, const char *, const char *));
+                                       const char *help,
+                                       int (*get_completions)(struct cli_def *cli, const char *, const char *,
+                                                              struct cli_comphelp *),
+                                       int (*validator)(struct cli_def *cli, const char *, const char *),
+                                       int (*transient_mode)(struct cli_def *, const char *, const char *));
 int cli_optarg_addhelp(struct cli_optarg *optarg, const char *helpname, const char *helptext);
 char *cli_find_optarg_value(struct cli_def *cli, char *name, char *find_after);
 struct cli_optarg_pair *cli_get_all_found_optargs(struct cli_def *cli);
@@ -251,16 +252,16 @@ void cli_unregister_all_commands(struct cli_def *cli);
 void cli_unregister_all(struct cli_def *cli, struct cli_command *command);
 
 /*
- * Expose some previous internal routines.  Just in case someone was using those 
+ * Expose some previous internal routines.  Just in case someone was using those
  * with an explicit reference, the original routines (cli_int_*) internally point
  * to the newly public routines.
  */
-int cli_help(struct cli_def *cli, const char *command, char *argv[], int argc) ;
-int cli_history(struct cli_def *cli, const char *command, char *argv[], int argc) ;
-int cli_exit(struct cli_def *cli, const char *command, char *argv[], int argc) ;
-int cli_quit(struct cli_def *cli, const char *command, char *argv[], int argc) ;
-int cli_enable(struct cli_def *cli, const char *command, char *argv[], int argc) ;
-int cli_disable(struct cli_def *cli, const char *command, char *argv[], int argc) ;
+int cli_help(struct cli_def *cli, const char *command, char *argv[], int argc);
+int cli_history(struct cli_def *cli, const char *command, char *argv[], int argc);
+int cli_exit(struct cli_def *cli, const char *command, char *argv[], int argc);
+int cli_quit(struct cli_def *cli, const char *command, char *argv[], int argc);
+int cli_enable(struct cli_def *cli, const char *command, char *argv[], int argc);
+int cli_disable(struct cli_def *cli, const char *command, char *argv[], int argc);
 
 #ifdef __cplusplus
 }
