@@ -67,6 +67,12 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Thu Dec 5 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
+- Updated CLI_CMD_OPTIONAL_FLAG parsing to use an validator function
+  (if provided) to determine if the word being looked is a match for
+  the optional flag.  If no validator function is provided then the 
+  word much match the name of the optional flag exactly.
+
 * Thu Nov 14 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
 - Enhance how cli_parse_line handles quotes when parsine the command
   line.  This includs mixed single/double quotes, embedded quoted 
@@ -74,6 +80,7 @@ rm -rf $RPM_BUILD_ROOT
 - Ensure that buildmode preserves 'empty' strings
   (ex: "", or '') when regenerating the cmdline after the user 'executes'
   the command.
+
 * Fri Sep 7 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.2-1
 - Fix bug where 'extra help' added with cli_optarg_addhelp() were not 
   being displayed for optional argumenets
