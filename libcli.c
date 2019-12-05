@@ -3241,9 +3241,14 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       if ((oaptr->mode != cli->mode) && (oaptr->mode != cli->transient_mode) && (oaptr->mode != MODE_ANY)) continue;
 
       /*
-       * Two special cases - a hphenated option and an 'exact' match optional flag or optional argument.
-       * If our word starts with a '-' and we have a CMD_CLI_HYPHENATED_OPTION or an exact match for an optional
-       * flag/argument name trumps anything and will be the *only* candidate.
+       * Special cases:
+       * - spot check
+       * - a hyphenated option a hyphenated option
+       * - an optional flag without validator, but the word matches the optarg name
+       * - an optional flag with a validator *and* the word passes the validator,
+       * - an optional argument where the word matches the argument name
+       * a hit on any of these special cases is an automatic *only* candidate.
+       *
        * Otherwise if the word is 'blank', could be an argument, or matches 'enough' of an option/flag it is a
        * candidate.
        * Once we accept an argument as a candidate, we're done looking for candidates as straight arguments are
@@ -3256,13 +3261,19 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
           cli_reprompt(cli);
           goto done;
         }
-      } else if (stage->words[word_idx] && (oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTIONAL_ARGUMENT)) &&
-                 !strcmp(oaptr->name, stage->words[word_idx])) {
+      } else if (stage->words[word_idx] && stage->words[word_idx][0] == '-' &&
+                 (oaptr->flags & (CLI_CMD_HYPHENATED_OPTION))) {
         candidates[0] = oaptr;
         num_candidates = 1;
         break;
-      } else if (stage->words[word_idx] && stage->words[word_idx][0] == '-' &&
-                 (oaptr->flags & (CLI_CMD_HYPHENATED_OPTION))) {
+      } else if (stage->words[word_idx] && (oaptr->flags & CLI_CMD_OPTIONAL_FLAG) &&
+                 ((oaptr->validator && (oaptr->validator(cli, oaptr->name, stage->words[word_idx]) == CLI_OK)) ||
+                  (!oaptr->validator && !strcmp(oaptr->name, stage->words[word_idx])))) {
+        candidates[0] = oaptr;
+        num_candidates = 1;
+        break;
+      } else if (stage->words[word_idx] && (oaptr->flags & CLI_CMD_OPTIONAL_ARGUMENT) &&
+                 !strcmp(oaptr->name, stage->words[word_idx])) {
         candidates[0] = oaptr;
         num_candidates = 1;
         break;
@@ -3397,8 +3408,8 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       goto done;
     }
 
-    // Optional flags and arguments can appear multiple times, but true arguments only once.  Advance our optarg
-    // starting point when we see a true argument
+    // Optional flags and arguments can appear multiple times, and in any order.  We only advance
+    // from our starting optarg if the matching optarg is a true argument.
     if (oaptr->flags & CLI_CMD_ARGUMENT) {
       // Advance past this argument entry
       optarg = oaptr->next;

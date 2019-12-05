@@ -307,6 +307,10 @@ int side_length_validator(struct cli_def *cli, const char *name, const char *val
   return rc;
 }
 
+int transparent_validator(struct cli_def *cli, const char *name, const char *value) {
+  return strcasecmp("transparent", value) ? CLI_ERROR : CLI_OK;
+}
+
 int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const char *value)) {
   char *color;
   char *transparent;
@@ -384,8 +388,10 @@ void run_child(int x) {
       cli, NULL, "perimeter", cmd_perimeter, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
       "Calculate perimeter of polygon\nhas embedded "
       "newline\nand_a_really_long_line_that_is_much_longer_than_80_columns_to_show_that_wrap_case");
-  cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      "Set transparent flag", NULL, NULL, NULL);
+  o = cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                          "Set transparent flag", NULL, NULL, NULL);
+  cli_optarg_addhelp(o, "transparent", "(any case)set to transparent");
+
   cli_register_optarg(
       c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
       "Set verbose flagwith some humongously long string \nwithout any embedded newlines in it to test with", NULL,
