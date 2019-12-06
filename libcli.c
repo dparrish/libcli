@@ -3488,3 +3488,14 @@ int cli_int_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char
 int cli_int_disable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
   return cli_disable(cli, command, argv, argc);
 }
+
+void cli_dump_optargs_and_args(struct cli_def *cli, const char *text, char *argv[], int argc) {
+  int i;
+  struct cli_optarg_pair *optargs;
+  cli_print(cli, "%s: mode = %d, transient_mode = %d", text, cli->mode, cli->transient_mode);
+  cli_print(cli, "Identified optargs");
+  for (optargs = cli_get_all_found_optargs(cli), i = 0; optargs; optargs = optargs->next, i++)
+    cli_print(cli, "%2d  %s=%s", i, optargs->name, optargs->value);
+  cli_print(cli, "Extra args");
+  for (i = 0; i < argc; i++) cli_print(cli, "%2d %s", i, argv[i]);
+}

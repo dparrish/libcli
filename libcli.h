@@ -217,6 +217,7 @@ void cli_print_callback(struct cli_def *cli, void (*callback)(struct cli_def *, 
 void cli_free_history(struct cli_def *cli);
 void cli_set_idle_timeout(struct cli_def *cli, unsigned int seconds);
 void cli_set_idle_timeout_callback(struct cli_def *cli, unsigned int seconds, int (*callback)(struct cli_def *));
+void cli_dump_optargs_and_args(struct cli_def *cli, const char *text, char *argv[], int argc);
 
 // Enable or disable telnet protocol negotiation.
 // Note that this is enabled by default and must be changed before cli_loop() is run.

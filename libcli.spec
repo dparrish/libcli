@@ -70,6 +70,9 @@ rm -rf $RPM_BUILD_ROOT
 * Fri Dec 6 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
 - Tweak to buildmode to only show optargs 'after' the point at
   which buildmode was entered.
+- Add new 'cli_dump_optargs_and_args() function for development/debug
+  Designed to be called from a callback to show output of optarg and
+  argument processing.
 
 * Thu Dec 5 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
 - Updated CLI_CMD_OPTIONAL_FLAG parsing to use an validator function
