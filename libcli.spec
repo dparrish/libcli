@@ -67,6 +67,10 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Fri Dec 6 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
+- Tweak to buildmode to only show optargs 'after' the point at
+  which buildmode was entered.
+
 * Thu Dec 5 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
 - Updated CLI_CMD_OPTIONAL_FLAG parsing to use an validator function
   (if provided) to determine if the word being looked is a match for

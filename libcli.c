@@ -2329,6 +2329,7 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   struct cli_optarg *optarg;
   struct cli_command *c;
   struct cli_buildmode *buildmode;
+  struct cli_optarg *buildmodeOptarg = NULL;
   int rc = CLI_BUILDMODE_START;
 
   if (!cli || !(buildmode = (struct cli_buildmode *)calloc(1, sizeof(struct cli_buildmode)))) {
@@ -2350,7 +2351,14 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   cli->buildmode->command = stage->command;
 
   // Build new *limited* list of commands from this commands optargs
-  for (optarg = stage->command->optargs; optarg; optarg = optarg->next) {
+  // Currently we only allow a single entry point to a buildmode, so advance t that
+  // optarg and proceed from there.
+  for (buildmodeOptarg = stage->command->optargs;
+       buildmodeOptarg && !(buildmodeOptarg->flags & CLI_CMD_ALLOW_BUILDMODE); buildmodeOptarg = buildmodeOptarg->next)
+    ;
+
+  // Now start at this argument and flesh out the rest of the commands available for this buildmode
+  for (optarg = buildmodeOptarg; optarg; optarg = optarg->next) {
     // Don't allow anything that could redefine our mode or buildmode mode, or redefine exit/cancel/show/unset
     if (!strcmp(optarg->name, "cancel") || !strcmp(optarg->name, "execute") || !strcmp(optarg->name, "show") ||
         !strcmp(optarg->name, "unset")) {
@@ -2359,6 +2367,8 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
       goto out;
     }
     if (optarg->flags & (CLI_CMD_ALLOW_BUILDMODE | CLI_CMD_TRANSIENT_MODE | CLI_CMD_SPOT_CHECK)) continue;
+    // accept the first optarg allowing buildmode, but reject any subsequent one
+    if (optarg->flags & CLI_CMD_ALLOW_BUILDMODE && (optarg != buildmodeOptarg)) continue;
     if (optarg->mode != cli->mode && optarg->mode != cli->transient_mode)
       continue;
     else if (optarg->flags & (CLI_CMD_OPTIONAL_ARGUMENT | CLI_CMD_ARGUMENT)) {
