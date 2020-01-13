@@ -3103,8 +3103,8 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
     delim_end = DELIM_ARG_END;
   } else if (optarg->flags & CLI_CMD_OPTIONAL_ARGUMENT) {
     /*
-     * Optional args can match against the name the value.
-     * Here 'anchor_word' is the name, and 'next_word' is what we're matching against.
+     * Optional args can match against the name or the value.
+     * Here 'anchor_word' is the name, and 'next_word' is 'value' for said optional argument.
      * So if anchor_word==next_word we're looking at the 'name' of the optarg, otherwise we know the name and are going
      * against the value.
      */
@@ -3155,11 +3155,21 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
 
     /*
      * Print out actual text into a working buffer that we can then call 'strtok_r' on it.  This lets
-     * us prepend some optional fields nice and easily.  At this point it is one big string.
+     * us prepend some optional fields nice and easily.  At this point it is one big string, so we can 
+     * iterate over it making changes (strtok_r) as needed.
      */
-    helplen = asprintf(&working, "%s%s%s%s%s", (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
-                       (help_insert) ? "type '" : "", (help_insert) ? optarg->name : "",
-                       (help_insert) ? "' to set " : "", (help_insert) ? optarg->name : optarg->help);
+    if (help_insert) {
+    	helplen = asprintf(&working, "%s%s%s%s%s", (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
+                       "type '",
+		       optarg->name ,
+                       "' to select ",
+		       optarg->name );
+    }
+    else {
+    	helplen = asprintf(&working, "%s%s", (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
+		       optarg->help );
+    }
+    
 
     // pull the first line
     helpptr = strtok_r(working, "\v", &savelineptr);

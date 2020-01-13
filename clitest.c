@@ -394,7 +394,7 @@ void run_child(int x) {
 
   cli_register_optarg(
       c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-      "Set verbose flagwith some humongously long string \nwithout any embedded newlines in it to test with", NULL,
+      "Set verbose flag with some humongously long string \nwithout any embedded newlines in it to test with", NULL,
       NULL, NULL);
   o = cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
                           color_completor, color_validator, NULL);

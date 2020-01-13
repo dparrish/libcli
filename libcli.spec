@@ -67,6 +67,10 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Fri Jan 10 2020 Rob Sanders <rsanders@forcepoint.com> 10.10.3-1
+- Minor cosmetic change to how help messages are generated, minor edits
+  to some comments, minor cosmetic change to clitest demo code
+
 * Fri Dec 6 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
 - Tweak to buildmode to only show optargs 'after' the point at
   which buildmode was entered.
