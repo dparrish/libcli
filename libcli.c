@@ -3155,21 +3155,15 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
 
     /*
      * Print out actual text into a working buffer that we can then call 'strtok_r' on it.  This lets
-     * us prepend some optional fields nice and easily.  At this point it is one big string, so we can 
+     * us prepend some optional fields nice and easily.  At this point it is one big string, so we can
      * iterate over it making changes (strtok_r) as needed.
      */
     if (help_insert) {
-    	helplen = asprintf(&working, "%s%s%s%s%s", (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
-                       "type '",
-		       optarg->name ,
-                       "' to select ",
-		       optarg->name );
+      helplen = asprintf(&working, "%s%s%s%s%s", (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "", "type '",
+                         optarg->name, "' to select ", optarg->name);
+    } else {
+      helplen = asprintf(&working, "%s%s", (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "", optarg->help);
     }
-    else {
-    	helplen = asprintf(&working, "%s%s", (optarg->flags & CLI_CMD_ALLOW_BUILDMODE) ? "* " : "",
-		       optarg->help );
-    }
-    
 
     // pull the first line
     helpptr = strtok_r(working, "\v", &savelineptr);
