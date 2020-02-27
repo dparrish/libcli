@@ -15,6 +15,7 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
+
 #include "libcli.h"
 
 // vim:sw=4 tw=120 et
@@ -265,8 +266,8 @@ int shape_transient_eval(struct cli_def *cli, const char *name, const char *valu
   return CLI_ERROR;
 }
 
-const char *KnownColors[] = {"black",    "white",    "gray",      "red",        "blue",
-                             "green",    "lightred", "lightblue", "lightgreen", "darkred",
+const char *KnownColors[] = {"black",    "white",     "gray",      "red",        "blue",
+                             "green",    "lightred",  "lightblue", "lightgreen", "darkred",
                              "darkblue", "darkgreen", "lavender",  "yellow",     NULL};
 
 int color_completor(struct cli_def *cli, const char *name, const char *word, struct cli_comphelp *comphelp) {
@@ -306,6 +307,10 @@ int side_length_validator(struct cli_def *cli, const char *name, const char *val
   return rc;
 }
 
+int transparent_validator(struct cli_def *cli, const char *name, const char *value) {
+  return strcasecmp("transparent", value) ? CLI_ERROR : CLI_OK;
+}
+
 int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const char *value)) {
   char *color;
   char *transparent;
@@ -320,6 +325,18 @@ int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const
   } else if (color && !strcmp(color, "black") && transparent) {
     cli_error(cli, "\nCan not have a transparent black object!");
     return CLI_ERROR;
+  }
+  return CLI_OK;
+}
+
+int cmd_string(struct cli_def *cli, const char *command, char *argv[], int argc) {
+  int i;
+  cli_print(cli, "Raw commandline was <%s>", cli->pipeline->cmdline);
+  cli_print(cli, "Value for text argument is <%s>", cli_get_optarg_value(cli, "text", NULL));
+
+  cli_print(cli, "Found %d 'extra' arguments after 'text' argument was processed", argc);
+  for (i = 0; i != argc; i++) {
+    cli_print(cli, "  Extra arg %d = <%s>", i + 1, argv[i]);
   }
   return CLI_OK;
 }
@@ -367,33 +384,40 @@ void run_child(int x) {
 
   // Register some commands/subcommands to demonstrate opt/arg and buildmode operations
 
-  c = cli_register_command(cli, NULL, "perimeter", cmd_perimeter, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                           "Calculate perimeter of polygon\nhas embedded newline\nand_a_really_long_line_that_is_much_longer_than_80_columns_to_show_that_wrap_case");
-  cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      "Set transparent flag", NULL, NULL, NULL);
-  cli_register_optarg(c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      "Set verbose flagwith some humongously long string \nwithout any embedded newlines in it to test with", NULL, NULL, NULL);
+  c = cli_register_command(
+      cli, NULL, "perimeter", cmd_perimeter, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+      "Calculate perimeter of polygon\nhas embedded "
+      "newline\nand_a_really_long_line_that_is_much_longer_than_80_columns_to_show_that_wrap_case");
+  o = cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                          "Set transparent flag", NULL, NULL, NULL);
+  cli_optarg_addhelp(o, "transparent", "(any case)set to transparent");
+
+  cli_register_optarg(
+      c, "verbose", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_OPTION_MULTIPLE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+      "Set verbose flag with some humongously long string \nwithout any embedded newlines in it to test with", NULL,
+      NULL, NULL);
   o = cli_register_optarg(c, "color", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Set color",
-                      color_completor, color_validator, NULL);
-  cli_optarg_addhelp(o, "black" , "the color 'black'");
-  cli_optarg_addhelp(o, "white" , "the color 'white'");
-  cli_optarg_addhelp(o, "gray" , "the color 'gray'");
-  cli_optarg_addhelp(o, "red" , "the color 'red'");
-  cli_optarg_addhelp(o, "blue" , "the color 'blue'");
-  cli_optarg_addhelp(o, "green" , "the color 'green'");
-  cli_optarg_addhelp(o, "lightred" , "the color 'lightred'");
-  cli_optarg_addhelp(o, "lightblue" , "the color 'lightblue'");
-  cli_optarg_addhelp(o, "lightgreen" , "the color 'lightgreen'");
-  cli_optarg_addhelp(o, "darkred" , "the color 'darkred'");
-  cli_optarg_addhelp(o, "darkblue" , "the color 'darkblue'");
-  cli_optarg_addhelp(o, "darkgreen" , "the color 'darkgreen'");
-  cli_optarg_addhelp(o, "lavender" , "the color 'lavender'");
-  cli_optarg_addhelp(o, "yellow" , "the color 'yellow'");
-   
+                          color_completor, color_validator, NULL);
+  cli_optarg_addhelp(o, "black", "the color 'black'");
+  cli_optarg_addhelp(o, "white", "the color 'white'");
+  cli_optarg_addhelp(o, "gray", "the color 'gray'");
+  cli_optarg_addhelp(o, "red", "the color 'red'");
+  cli_optarg_addhelp(o, "blue", "the color 'blue'");
+  cli_optarg_addhelp(o, "green", "the color 'green'");
+  cli_optarg_addhelp(o, "lightred", "the color 'lightred'");
+  cli_optarg_addhelp(o, "lightblue", "the color 'lightblue'");
+  cli_optarg_addhelp(o, "lightgreen", "the color 'lightgreen'");
+  cli_optarg_addhelp(o, "darkred", "the color 'darkred'");
+  cli_optarg_addhelp(o, "darkblue", "the color 'darkblue'");
+  cli_optarg_addhelp(o, "darkgreen", "the color 'darkgreen'");
+  cli_optarg_addhelp(o, "lavender", "the color 'lavender'");
+  cli_optarg_addhelp(o, "yellow", "the color 'yellow'");
+
   cli_register_optarg(c, "__check1__", CLI_CMD_SPOT_CHECK, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, NULL, NULL,
                       check1_validator, NULL);
   o = cli_register_optarg(c, "shape", CLI_CMD_ARGUMENT | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                      "Specify shape(shows subtext on help)", shape_completor, shape_validator, shape_transient_eval);
+                          "Specify shape(shows subtext on help)", shape_completor, shape_validator,
+                          shape_transient_eval);
   cli_optarg_addhelp(o, "triangle", "specify a triangle");
   cli_optarg_addhelp(o, "rectangle", "specify a rectangle");
 
@@ -411,6 +435,13 @@ void run_child(int x) {
                       "Specify side 3 length", NULL, side_length_validator, NULL);
   cli_register_optarg(c, "side_4", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_POLYGON_RECTANGLE,
                       "Specify side 4 length", NULL, side_length_validator, NULL);
+
+  c = cli_register_command(cli, NULL, "string", cmd_string, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                           "string input argument testing");
+
+  cli_register_optarg(c, "buildmode", CLI_CMD_OPTIONAL_FLAG | CLI_CMD_ALLOW_BUILDMODE, PRIVILEGE_UNPRIVILEGED,
+                      MODE_EXEC, "flag", NULL, NULL, NULL);
+  cli_register_optarg(c, "text", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "text string", NULL, NULL, NULL);
 
   // Set user context and its command
   cli_set_context(cli, (void *)&myctx);

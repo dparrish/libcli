@@ -1,4 +1,4 @@
-Version: 1.10.2
+Version: 1.10.3
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,31 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Fri Jan 10 2020 Rob Sanders <rsanders@forcepoint.com> 10.10.3-1
+- Minor cosmetic change to how help messages are generated, minor edits
+  to some comments, minor cosmetic change to clitest demo code
+
+* Fri Dec 6 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
+- Tweak to buildmode to only show optargs 'after' the point at
+  which buildmode was entered.
+- Add new 'cli_dump_optargs_and_args() function for development/debug
+  Designed to be called from a callback to show output of optarg and
+  argument processing.
+
+* Thu Dec 5 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
+- Updated CLI_CMD_OPTIONAL_FLAG parsing to use an validator function
+  (if provided) to determine if the word being looked is a match for
+  the optional flag.  If no validator function is provided then the 
+  word much match the name of the optional flag exactly.
+
+* Thu Nov 14 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
+- Enhance how cli_parse_line handles quotes when parsine the command
+  line.  This includs mixed single/double quotes, embedded quoted 
+  substrings, and handling 'escaped' quotes using the '\' character.  
+- Ensure that buildmode preserves 'empty' strings
+  (ex: "", or '') when regenerating the cmdline after the user 'executes'
+  the command.
+
 * Fri Sep 7 2019 Rob Sanders <rsanders@forcepoint.com> 1.10.2-1
 - Fix bug where 'extra help' added with cli_optarg_addhelp() were not 
   being displayed for optional argumenets
