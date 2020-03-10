@@ -1,4 +1,4 @@
-Version: 1.10.3
+Version: 1.10.4
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,7 +67,11 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
-* Fri Jan 10 2020 Rob Sanders <rsanders@forcepoint.com> 10.10.3-1
+* Tue Mar 3 2020 Rob Sanders <rsanders@forcepoint.com> 1.10.4-1
+- Fix segfault issue found during tab/help processing
+- Minor fix of version on previous changelog record
+
+* Fri Jan 10 2020 Rob Sanders <rsanders@forcepoint.com> 1.10.3-1
 - Minor cosmetic change to how help messages are generated, minor edits
   to some comments, minor cosmetic change to clitest demo code
 

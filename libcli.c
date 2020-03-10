@@ -933,12 +933,17 @@ out:
   if (c) {
     // Advance past first word of stage
     i++;
+    stage->command = c;
     stage->first_unmatched = i;
     if (c->optargs) {
       cli_int_parse_optargs(cli, stage, c, lastchar, comphelp);
     } else if (lastchar == '?') {
       // Special case for getting help with no defined optargs....
       comphelp->num_entries = -1;
+    }
+    if  (stage->status) {
+      // if we had an error here we need to redraw the commandline 
+      cli_reprompt(cli);
     }
   }
 
@@ -3310,7 +3315,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
     if (num_candidates > 1 && (lastchar == '\0' || word_idx < (stage->num_words - 1))) {
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_AMBIGUOUS;
-      cli_error(cli, "Ambiguous option/argument for command %s", stage->command->command);
+      cli_error(cli, "\nAmbiguous option/argument for command %s", stage->command->command);
       goto done;
     }
 
