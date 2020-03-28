@@ -186,7 +186,7 @@ struct cli_buildmode {
   char *mode_text;
 };
 
-struct cli_def *cli_init();
+struct cli_def *cli_init(void);
 int cli_done(struct cli_def *cli);
 struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command,
                                          int (*callback)(struct cli_def *, const char *, char **, int), int privilege,
