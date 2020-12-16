@@ -21,6 +21,12 @@
 #ifndef WIN32
 #include <regex.h>
 #endif
+#if defined(LIBCLI_USE_POLL) && !defined(WIN32)
+#include <poll.h>
+#define CLI_SOCKET_WAIT_PERROR "poll"
+#else
+#define CLI_SOCKET_WAIT_PERROR "select"
+#endif
 #include "libcli.h"
 
 #ifdef __GNUC__
@@ -170,6 +176,7 @@ inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipe
 static void cli_int_free_pipeline(struct cli_pipeline *pipeline);
 static void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
 static void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp);
+static int cli_socket_wait(int sockfd, struct timeval *tm);
 
 static char DELIM_OPT_START[] = "[";
 static char DELIM_OPT_END[] = "]";
@@ -1087,7 +1094,6 @@ int cli_loop(struct cli_def *cli, int sockfd) {
 
     while (1) {
       int sr;
-      fd_set r;
 
       /*
        * Ensure our transient mode is reset to the starting mode on *each* loop traversal transient mode is valid only
@@ -1128,12 +1134,9 @@ int cli_loop(struct cli_def *cli, int sockfd) {
         cli->showprompt = 0;
       }
 
-      FD_ZERO(&r);
-      FD_SET(sockfd, &r);
-
-      if ((sr = select(sockfd + 1, &r, NULL, NULL, &tm)) < 0) {
+      if ((sr = cli_socket_wait(sockfd, &tm)) < 0) {
         if (errno == EINTR) continue;
-        perror("select");
+        perror(CLI_SOCKET_WAIT_PERROR);
         l = -1;
         break;
       }
@@ -3507,4 +3510,20 @@ void cli_dump_optargs_and_args(struct cli_def *cli, const char *text, char *argv
     cli_print(cli, "%2d  %s=%s", i, optargs->name, optargs->value);
   cli_print(cli, "Extra args");
   for (i = 0; i < argc; i++) cli_print(cli, "%2d %s", i, argv[i]);
+}
+
+static int cli_socket_wait(int sockfd, struct timeval *tm) {
+#if defined(LIBCLI_USE_POLL) && !defined(WIN32)
+  struct pollfd pfd = {
+      .fd = sockfd,
+      .events = POLLIN,
+  };
+
+  return poll(&pfd, 1, (tm->tv_sec * 1000) + (tm->tv_usec / 1000));
+#else
+  fd_set r;
+  FD_ZERO(&r);
+  FD_SET(sockfd, &r);
+  return select(sockfd + 1, &r, NULL, NULL, tm);
+#endif
 }
