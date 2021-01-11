@@ -941,8 +941,8 @@ out:
       // Special case for getting help with no defined optargs....
       comphelp->num_entries = -1;
     }
-    if  (stage->status) {
-      // if we had an error here we need to redraw the commandline 
+    if (stage->status) {
+      // if we had an error here we need to redraw the commandline
       cli_reprompt(cli);
     }
   }
@@ -3218,7 +3218,7 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
 static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage *stage, struct cli_command *cmd,
                                   char lastchar, struct cli_comphelp *comphelp) {
   struct cli_optarg *optarg = NULL, *oaptr = NULL;
-  int word_idx, word_incr, candidate_idx;
+  int word_idx, value_idx, word_incr, candidate_idx;
   struct cli_optarg *candidates[CLI_MAX_LINE_WORDS];
   char *value;
   int num_candidates = 0;
@@ -3351,6 +3351,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
 
     // Set some values for use later - makes code much easier to read
     value = stage->words[word_idx];
+    value_idx = word_idx;
     oaptr = candidates[0];
     validator = oaptr->validator;
     if ((oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_ARGUMENT) && word_idx == (stage->num_words - 1)) ||
@@ -3368,6 +3369,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         goto done;
       }
       value = stage->words[word_idx + 1];
+      value_idx = word_idx + 1;
     }
 
     /*
@@ -3405,7 +3407,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       }
     } else {
       cli_error(cli, "%sProblem parsing command setting %s with value %s", lastchar == '\0' ? "" : "\n", oaptr->name,
-                stage->words[word_idx]);
+                stage->words[value_idx]);
       cli_reprompt(cli);
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_ERROR;
