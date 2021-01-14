@@ -2803,9 +2803,10 @@ static int cli_int_locate_command(struct cli_def *cli, struct cli_command *comma
           if (c->callback) {
             rc = CLI_OK;
             goto CORRECT_CHECKS;
-          } else {
-            cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", stage->words[start_word]);
           }
+          // show the command from word 0 up until the 'bad' word at start_word+1
+          cli_error(cli, "Invalid command \"%s %s\"", cli_command_name(cli, c), stage->words[start_word + 1]);
+          return CLI_ERROR;
         }
         return rc;
       }
@@ -2821,6 +2822,7 @@ static int cli_int_locate_command(struct cli_def *cli, struct cli_command *comma
         stage->command = c;
         stage->first_unmatched = start_word + 1;
         stage->first_optarg = stage->first_unmatched;
+        // cli_int_parse_optargs will display any detected errors...
         cli_int_parse_optargs(cli, stage, c, '\0', NULL);
         rc = stage->status;
       }
@@ -2844,8 +2846,8 @@ static int cli_int_locate_command(struct cli_def *cli, struct cli_command *comma
     goto AGAIN;
   }
 
-  if (start_word == 0)
-    cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", stage->words[start_word]);
+  // display this if we matched against absolutely nothing....
+  if (start_word == 0) cli_error(cli, "Invalid command \"%s\"", stage->words[start_word]);
 
   return CLI_ERROR_ARG;
 }
@@ -3053,6 +3055,13 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
    */
 
   do {
+    // note - 22 is used because name is always indented 2 spaces
+    if ((nameptr != emptystring) && (namewidth > 22)) {
+      if (asprintf(&line, "%s", nameptr) < 0) break;
+      cli_add_comphelp_entry(comphelp, line);
+      nameptr = emptystring;
+      namewidth = 22;
+    }
     toprint = strlen(helpptr);
     if (toprint > availwidth) {
       toprint = availwidth;
@@ -3076,6 +3085,8 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
 
     nameptr = emptystring;
     helpptr += toprint;
+    // regardless of how long the command is, indent by 20 chars on all following lines
+    namewidth = 22;
     // advance to first non whitespace
     while (helpptr && isspace(*helpptr)) helpptr++;
   } while (*helpptr);
