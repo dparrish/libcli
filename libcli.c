@@ -2908,7 +2908,6 @@ void cli_int_free_pipeline(struct cli_pipeline *pipeline) {
   for (i = 0; i < pipeline->num_words; i++) free_z(pipeline->words[i]);
   free_z(pipeline->cmdline);
   free_z(pipeline);
-  pipeline = NULL;
 }
 
 void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline) {
