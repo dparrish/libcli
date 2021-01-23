@@ -1889,9 +1889,9 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
   if (!state) return CLI_ERROR;
 
   if (!strcmp(cli->pipeline->current_stage->words[0], "include")) {
-    state->match.string = strdup(search_pattern);
+    state->match.string = search_pattern;
   } else if (!strcmp(cli->pipeline->current_stage->words[0], "exclude")) {
-    state->match.string = strdup(search_pattern);
+    state->match.string = search_pattern;
     state->flags = MATCH_INVERT;
 #ifndef WIN32
   } else {
@@ -1942,8 +1942,6 @@ int cli_match_filter(UNUSED(struct cli_def *cli), const char *string, void *data
   if (!string) {
     if (state->flags & MATCH_REGEX)
       regfree(&state->match.re);
-    else
-      free(state->match.string);
 
     free(state);
     return CLI_OK;
