@@ -2465,6 +2465,10 @@ int cli_int_execute_buildmode(struct cli_def *cli) {
   char *value = NULL;
 
   cmdline = strdup(cli_command_name(cli, cli->buildmode->command));
+  if (!cmdline) {
+    cli_error(cli, "Unable to allocate memory to process buildmode commandline");
+    rc =  CLI_ERROR;
+  }
   for (optarg = cli->buildmode->command->optargs; rc == CLI_OK && optarg; optarg = optarg->next) {
     value = NULL;
     do {
@@ -2480,16 +2484,16 @@ int cli_int_execute_buildmode(struct cli_def *cli) {
       } else if (value) {
         if (optarg->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_ARGUMENT)) {
           if (!(cmdline = cli_int_buildmode_extend_cmdline(cmdline, value))) {
-            cli_error(cli, "Unable to append to building commandlne");
+            cli_error(cli, "Unable to allocate memory to process buildmode commandline");
             rc = CLI_ERROR;
           }
         } else {
           if (!(cmdline = cli_int_buildmode_extend_cmdline(cmdline, optarg->name))) {
-            cli_error(cli, "Unable to append to building commandlne");
+            cli_error(cli, "Unable to allocate memory to process buildmode commandline");
             rc = CLI_ERROR;
           }
           if (!(cmdline = cli_int_buildmode_extend_cmdline(cmdline, value))) {
-            cli_error(cli, "Unable to append to building commandlne");
+            cli_error(cli, "Unable to allocate memory to process buildmode commandline");
             rc = CLI_ERROR;
           }
         }
