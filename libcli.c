@@ -988,6 +988,7 @@ void cli_regular_interval(struct cli_def *cli, int seconds) {
 #define DES_PREFIX "{crypt}"  // To distinguish clear text from DES crypted
 #define MD5_PREFIX "$1$"
 
+// returns 0 on fail/error, 1 if password checks out
 static int pass_matches(const char *pass, const char *attempt) {
   int des;
   if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX) - 1))) pass += sizeof(DES_PREFIX) - 1;
@@ -996,7 +997,10 @@ static int pass_matches(const char *pass, const char *attempt) {
   // TODO(dparrish): Find a small crypt(3) function for use on windows
   if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX) - 1)) attempt = crypt(attempt, pass);
 #endif
-
+  if (!attempt) {
+    // silent return here...
+    return 0;
+  }
   return !strcmp(pass, attempt);
 }
 
