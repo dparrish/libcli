@@ -585,7 +585,7 @@ struct cli_def *cli_init() {
 
   cli->buf_size = 1024;
   if (!(cli->buffer = calloc(cli->buf_size, 1))) {
-    free_z(cli);
+    cli_done(cli);
     return 0;
   }
   cli->telnet_protocol = 1;
@@ -600,17 +600,29 @@ struct cli_def *cli_init() {
   cli_register_command(cli, 0, "disable", cli_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Turn off privileged commands");
 
   c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC,
                        "Conlfigure from the terminal");
 
   // And now the built in filters
   c = cli_register_filter(cli, "begin", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Begin with lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "range_start", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Begin showing lines that match", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "between", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Between lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "range_start", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Begin showing lines that match", NULL, NULL, NULL);
   cli_register_optarg(c, "range_end", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
@@ -621,16 +633,28 @@ struct cli_def *cli_init() {
 
   c = cli_register_filter(cli, "exclude", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Exclude lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
                       MODE_ANY, "Search pattern", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "include", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
                       MODE_ANY, "Search pattern", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "grep", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match regex (options: -v, -i, -e)");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_flags", CLI_CMD_HYPHENATED_OPTION, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Search flags (-[ivx]", NULL, cli_search_flags_validator, NULL);
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
@@ -638,6 +662,10 @@ struct cli_def *cli_init() {
 
   c = cli_register_filter(cli, "egrep", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match extended regex");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_flags", CLI_CMD_HYPHENATED_OPTION, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Search flags (-[ivx]", NULL, cli_search_flags_validator, NULL);
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
