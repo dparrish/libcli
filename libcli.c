@@ -820,6 +820,7 @@ static char *join_words(int argc, char **argv) {
   }
 
   p = malloc(len + 1);
+  if (!p) return NULL;
   p[0] = 0;
 
   for (i = 0; i < argc; i++) {
@@ -1940,8 +1941,7 @@ int cli_match_filter(UNUSED(struct cli_def *cli), const char *string, void *data
   int r = CLI_ERROR;
 
   if (!string) {
-    if (state->flags & MATCH_REGEX)
-      regfree(&state->match.re);
+    if (state->flags & MATCH_REGEX) regfree(&state->match.re);
 
     free(state);
     return CLI_OK;
@@ -1971,10 +1971,13 @@ struct cli_range_filter_state {
 
 int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt) {
   struct cli_range_filter_state *state;
-  char *from = strdup(cli_get_optarg_value(cli, "range_start", NULL));
-  char *to = strdup(cli_get_optarg_value(cli, "range_end", NULL));
+  char *from = cli_get_optarg_value(cli, "range_start", NULL);
+  char *to = cli_get_optarg_value(cli, "range_end", NULL);
 
   // Do not have to check from/to since we would not have gotten here if we were missing a required argument.
+  // Note that since those pointers are not NULL, we don't have to strdup them or free them - just use the pointer
+  //    from the command line processing and continue
+
   filt->filter = cli_range_filter;
   filt->data = state = calloc(sizeof(struct cli_range_filter_state), 1);
   if (state) {
@@ -1982,8 +1985,6 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
     state->to = to;
     return CLI_OK;
   } else {
-    free_z(from);
-    free_z(to);
     return CLI_ERROR;
   }
 }
@@ -1993,8 +1994,6 @@ int cli_range_filter(UNUSED(struct cli_def *cli), const char *string, void *data
   int r = CLI_ERROR;
 
   if (!string) {
-    free_z(state->from);
-    free_z(state->to);
     free_z(state);
     return CLI_OK;
   }
@@ -2465,7 +2464,7 @@ int cli_int_execute_buildmode(struct cli_def *cli) {
   cmdline = strdup(cli_command_name(cli, cli->buildmode->command));
   if (!cmdline) {
     cli_error(cli, "Unable to allocate memory to process buildmode commandline");
-    rc =  CLI_ERROR;
+    rc = CLI_ERROR;
   }
   for (optarg = cli->buildmode->command->optargs; rc == CLI_OK && optarg; optarg = optarg->next) {
     value = NULL;
@@ -3402,6 +3401,13 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         if (oaptr->flags & CLI_CMD_REMAINDER_OF_LINE) {
           char *combined = NULL;
           combined = join_words(stage->num_words - word_idx, stage->words + word_idx);
+          if (!combined) {
+            cli_error(cli, "%sUnable to allocate memory for command processing", lastchar == '\0' ? "" : "\n");
+            cli_reprompt(cli);
+            stage->error_word = stage->words[word_idx];
+            stage->status = CLI_ERROR;
+            goto done;
+          }
           set_value_return = cli_set_optarg_value(cli, oaptr->name, combined, 0);
           free_z(combined);
         } else {
