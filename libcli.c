@@ -2362,11 +2362,12 @@ void cli_int_free_buildmode(struct cli_def *cli) {
 int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stage, char *mode_text) {
   struct cli_optarg *optarg;
   struct cli_command *c;
+  struct cli_optarg *o;
   struct cli_buildmode *buildmode;
   struct cli_optarg *buildmodeOptarg = NULL;
   int rc = CLI_BUILDMODE_START;
 
-  if (!cli || !(buildmode = (struct cli_buildmode *)calloc(1, sizeof(struct cli_buildmode)))) {
+  if (!(buildmode = (struct cli_buildmode *)calloc(1, sizeof(struct cli_buildmode)))) {
     cli_error(cli, "Unable to build buildmode mode for command %s", stage->command->command);
     rc = CLI_BUILDMODE_ERROR;
     goto out;
@@ -2434,16 +2435,36 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   cli->buildmode->cname = strdup(cli_command_name(cli, stage->command));
   // Now add the four 'always there' commands to cancel current mode and to execute the command, show settings, and
   // unset
-  cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, 0, PRIVILEGE_UNPRIVILEGED,
+  c = cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, 0, PRIVILEGE_UNPRIVILEGED,
                                      cli->mode, "Cancel command");
-  cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_execute_cback, 0, PRIVILEGE_UNPRIVILEGED,
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
+  c = cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_execute_cback, 0, PRIVILEGE_UNPRIVILEGED,
                                      cli->mode, "Execute command");
-  cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, 0, PRIVILEGE_UNPRIVILEGED,
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
+  c = cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, 0, PRIVILEGE_UNPRIVILEGED,
                                      cli->mode, "Show current settings");
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
   c = cli_int_register_buildmode_command(cli, NULL, "unset", cli_int_buildmode_unset_cback, 0, PRIVILEGE_UNPRIVILEGED,
                                          cli->mode, "Unset a setting");
-  cli_register_optarg(c, "setting", CLI_CMD_ARGUMENT | CLI_CMD_DO_NOT_RECORD, PRIVILEGE_UNPRIVILEGED, cli->mode,
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
+  o = cli_register_optarg(c, "setting", CLI_CMD_ARGUMENT | CLI_CMD_DO_NOT_RECORD, PRIVILEGE_UNPRIVILEGED, cli->mode,
                       "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator, NULL);
+  if (!o) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
 
 out:
   // And lastly set the initial help menu for the unset command
