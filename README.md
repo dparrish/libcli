@@ -16,7 +16,7 @@ or poll() in cli_loop().  The default is to use the legacy 'select()' call.
 If built with 'CFLAGS=-DLIBCLI_USE_POLL make' then the poll() system call will
 be used instead.  One additional check is being made now in cli_loop() to 
 ensure that the passed file descriptor is in range.  If not, an error message
-will be sent and cli_loop() will exit with CLI_ERROR.
+will be sent and the cli_loop() will exit in the child process with CLI_ERROR.
 
 This will install `libcli.so` into `/usr/local/lib`. If you want to change the
 location, edit Makefile.
@@ -111,7 +111,7 @@ process or thread to run the cli.  Once you are ready to process the
 connection, call `cli_loop(cli, sock)` to interact with the user on the
 given socket.  Note that as mentioned above, if the select() call is used and 
 sock is out of range (>= FD_SETSIZE) then cli_loop() will display an error in
-both the parent process and to the remote TCP connection before exiting.
+both the parent process and to the remote TCP connection before exiting that routine.
 
 This function will return when the user exits the cli, either by breaking the
 connection or entering `quit`.
