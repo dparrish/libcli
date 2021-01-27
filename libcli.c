@@ -168,7 +168,7 @@ static int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *p
 static int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 static void cli_int_free_pipeline(struct cli_pipeline *pipeline);
-static void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
+static struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
 static void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp);
 
 static char DELIM_OPT_START[] = "[";
@@ -193,15 +193,14 @@ static ssize_t _write(int fd, const void *buf, size_t count) {
   return written;
 }
 
-char *cli_command_name(struct cli_def *cli, struct cli_command *command) {
+char *cli_int_command_name(struct cli_def *cli, struct cli_command *command) {
   char *name;
   char *o;
-
-  if (cli->commandname) {
-    free(cli->commandname);
-    cli->commandname = NULL;
+  
+  if (command->full_command_name) {
+    free(command->full_command_name);
+    command->full_command_name = NULL;
   }
-  name = cli->commandname;
 
   if (!(name = calloc(1, 1))) return NULL;
 
@@ -215,8 +214,11 @@ char *cli_command_name(struct cli_def *cli, struct cli_command *command) {
     command = command->parent;
     free(o);
   }
-  cli->commandname = name;
   return name;
+}
+
+char *cli_command_name(struct cli_def *cli, struct cli_command *command) {
+  return command->full_command_name;
 }
 
 void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(const char *, const char *)) {
@@ -364,13 +366,20 @@ int cli_set_configmode(struct cli_def *cli, int mode, const char *config_desc) {
   return old;
 }
 
-void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c) {
+struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c) {
   struct cli_command *p = NULL;
 
-  if (!c) return;
+  if (!c) return NULL;
 
   c->parent = parent;
-
+  
+  /* Go build the 'full command name' now that told it who its parent is.
+   * If this fails, clean it up and return a NULL w/o proceeding.
+  */
+  if (!(c->full_command_name = cli_int_command_name(cli, c))) {
+    cli_free_command(cli, c);
+    return NULL;
+  }
   /*
    * Figure out we have a chain, or would be the first element on it.
    * If we'd be the first element, assign as such.
@@ -401,7 +410,7 @@ void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, 
     p->next = c;
     c->previous = p;
   }
-  return;
+  return c;
 }
 
 struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command,
@@ -426,9 +435,8 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     free(c);
     return NULL;
   }
-
-  cli_register_command_core(cli, parent, c);
-  return c;
+  
+  return cli_register_command_core(cli, parent, c);
 }
 
 static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
@@ -443,7 +451,7 @@ static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
   free(cmd->command);
   if (cmd->help) free(cmd->help);
   if (cmd->optargs) cli_unregister_all_optarg(cmd);
-
+  if (cmd->full_command_name) free(cmd->full_command_name);
   /*
    * Ok, update the pointers of anyone who pointed to us.
    * We have 3 pointers to worry about - parent, previous, and next.
@@ -721,7 +729,6 @@ int cli_done(struct cli_def *cli) {
 
   if (cli->buildmode) cli_int_free_buildmode(cli);
   cli_unregister_tree(cli, cli->commands, CLI_ANY_COMMAND);
-  free_z(cli->commandname);
   free_z(cli->modestring);
   free_z(cli->banner);
   free_z(cli->promptchar);
@@ -2125,8 +2132,7 @@ struct cli_command *cli_register_filter(struct cli_def *cli, const char *command
   }
 
   // Filters are all registered at the top level.
-  cli_register_command_core(cli, NULL, c);
-  return c;
+  return cli_register_command_core(cli, NULL, c);
 }
 
 int cli_unregister_filter(struct cli_def *cli, const char *command) {
@@ -2353,7 +2359,6 @@ void cli_int_free_buildmode(struct cli_def *cli) {
   if (!cli || !cli->buildmode) return;
   cli_unregister_tree(cli, cli->commands, CLI_BUILDMODE_COMMAND);
   cli->mode = cli->buildmode->mode;
-  free_z(cli->buildmode->cname);
   free_z(cli->buildmode->mode_text);
   cli_int_free_found_optargs(&cli->buildmode->found_optargs);
   free_z(cli->buildmode);
@@ -2432,7 +2437,7 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
       }
     }
   }
-  cli->buildmode->cname = strdup(cli_command_name(cli, stage->command));
+  cli->buildmode->cname = cli_command_name(cli, stage->command);
   // Now add the four 'always there' commands to cancel current mode and to execute the command, show settings, and
   // unset
   c = cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, 0, PRIVILEGE_UNPRIVILEGED,
@@ -2504,8 +2509,7 @@ struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, stru
   }
 
   // Buildmode commmands are all registered at the top level
-  cli_register_command_core(cli, NULL, c);
-  return c;
+  return cli_register_command_core(cli, NULL, c);
 }
 
 int cli_int_execute_buildmode(struct cli_def *cli) {
