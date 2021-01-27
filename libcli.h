@@ -71,7 +71,7 @@ struct cli_def {
   /* internal buffers */
   void *conn;
   void *service;
-  char *commandname;  // temporary buffer for cli_command_name() to prevent leak
+//  char *commandname;  // temporary buffer for cli_command_name() to prevent leak
   char *buffer;
   unsigned buf_size;
   struct timeval timeout_tm;
@@ -102,6 +102,7 @@ enum command_types {
 
 struct cli_command {
   char *command;
+  char *full_command_name;
   int (*callback)(struct cli_def *, const char *, char **, int);
   unsigned int unique_len;
   char *help;

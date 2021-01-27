@@ -67,6 +67,11 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Jan 27 2021 Rob Sa ders <rsanders@forcepoint.com> 1.10.5
+- Fix possible error where cli_command_name() returns a NULL by
+  generating full command name when a command is registered. 
+  Note - removed cli->commandname member
+
 * Thu Jan 14 2021 Rob Sanders <rsanders@forcepoint.com> 1.10.5
 - Fix issue where the help for 'long command name' winds up running into
   the actual help text w/o any spaces.  Now a long command will be on a line
