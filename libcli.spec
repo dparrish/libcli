@@ -67,7 +67,14 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
-* Wed Jan 27 2021 Rob Sa ders <rsanders@forcepoint.com> 1.10.5
+* Wed Jan 27 2021 Gerrit Huizenga <gerrit@us.ibm.com> 1.10.5
+- Add ppc64le to travis builds
+
+* Wed Jan 27 2021 Rob Sanders <rsanders@forcepoint.com> 1.10.5
+- Add additional range chack to cli_loop() if the 'select' call is used, and
+  punt if sockfd is out of range
+- Add preprocessor check (LIBCLI_USE_POLL) to toggle between using poll or
+  select in cli_loop().  Code submitted on github by @belge-sel.
 - Fix possible error where cli_command_name() returns a NULL by
   generating full command name when a command is registered. 
   Note - removed cli->commandname member

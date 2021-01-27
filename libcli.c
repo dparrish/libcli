@@ -174,7 +174,8 @@ static int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *p
 static int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 static void cli_int_free_pipeline(struct cli_pipeline *pipeline);
-static struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
+static struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent,
+                                                     struct cli_command *c);
 static void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp);
 static int cli_socket_wait(int sockfd, struct timeval *tm);
 
@@ -203,7 +204,7 @@ static ssize_t _write(int fd, const void *buf, size_t count) {
 char *cli_int_command_name(struct cli_def *cli, struct cli_command *command) {
   char *name;
   char *o;
-  
+
   if (command->full_command_name) {
     free(command->full_command_name);
     command->full_command_name = NULL;
@@ -379,10 +380,10 @@ struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_co
   if (!c) return NULL;
 
   c->parent = parent;
-  
+
   /* Go build the 'full command name' now that told it who its parent is.
    * If this fails, clean it up and return a NULL w/o proceeding.
-  */
+   */
   if (!(c->full_command_name = cli_int_command_name(cli, c))) {
     cli_free_command(cli, c);
     return NULL;
@@ -442,7 +443,7 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     free(c);
     return NULL;
   }
-  
+
   return cli_register_command_core(cli, parent, c);
 }
 
@@ -1097,6 +1098,16 @@ int cli_loop(struct cli_def *cli, int sockfd) {
   }
 #endif
 
+#ifndef LIBCLI_USE_POLL
+  /* Do a range check *early*, and punt if we were passed a file descriptor
+   * that is out of the valid range
+   */
+  if (sockfd >= FD_SETSIZE) {
+    fprintf(stderr, "CLI_LOOP() called with sockfd > FD_SETSIZE - aborting\n");
+    cli_error(cli, "CLI_LOOP() called with sockfd > FD_SETSIZE - exiting cli_loop\n");
+    return CLI_ERROR;
+  }
+#endif
   setbuf(cli->client, NULL);
   if (cli->banner) cli_error(cli, "%s", cli->banner);
 
@@ -2444,19 +2455,19 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
   // Now add the four 'always there' commands to cancel current mode and to execute the command, show settings, and
   // unset
   c = cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, 0, PRIVILEGE_UNPRIVILEGED,
-                                     cli->mode, "Cancel command");
+                                         cli->mode, "Cancel command");
   if (!c) {
     rc = CLI_BUILDMODE_ERROR;
     goto out;
   }
-  c = cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_execute_cback, 0, PRIVILEGE_UNPRIVILEGED,
-                                     cli->mode, "Execute command");
+  c = cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_execute_cback, 0,
+                                         PRIVILEGE_UNPRIVILEGED, cli->mode, "Execute command");
   if (!c) {
     rc = CLI_BUILDMODE_ERROR;
     goto out;
   }
   c = cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, 0, PRIVILEGE_UNPRIVILEGED,
-                                     cli->mode, "Show current settings");
+                                         cli->mode, "Show current settings");
   if (!c) {
     rc = CLI_BUILDMODE_ERROR;
     goto out;
@@ -2468,7 +2479,8 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
     goto out;
   }
   o = cli_register_optarg(c, "setting", CLI_CMD_ARGUMENT | CLI_CMD_DO_NOT_RECORD, PRIVILEGE_UNPRIVILEGED, cli->mode,
-                      "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator, NULL);
+                          "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator,
+                          NULL);
   if (!o) {
     rc = CLI_BUILDMODE_ERROR;
     goto out;
