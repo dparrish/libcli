@@ -11,7 +11,7 @@ PREFIX = /usr/local
 
 MAJOR = 1
 MINOR = 10
-REVISION = 4
+REVISION = 5
 LIB = libcli.so
 LIB_STATIC = libcli.a
 
@@ -79,7 +79,7 @@ install: $(TARGET_LIBS)
 rpmprep:
 	rm -rf libcli-$(MAJOR).$(MINOR).$(REVISION)
 	mkdir libcli-$(MAJOR).$(MINOR).$(REVISION)
-	cp -R libcli.{c,h} libcli.spec clitest.c Makefile COPYING README.md doc libcli-$(MAJOR).$(MINOR).$(REVISION)
+	cp -R libcli.c libcli.h libcli.spec clitest.c Makefile COPYING README.md doc libcli-$(MAJOR).$(MINOR).$(REVISION)
 	tar zcvf libcli-$(MAJOR).$(MINOR).$(REVISION).tar.gz --exclude CVS --exclude *.tar.gz libcli-$(MAJOR).$(MINOR).$(REVISION)
 	rm -rf libcli-$(MAJOR).$(MINOR).$(REVISION)
 

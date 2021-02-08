@@ -174,7 +174,8 @@ static int cli_int_validate_pipeline(struct cli_def *cli, struct cli_pipeline *p
 static int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 inline void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline);
 static void cli_int_free_pipeline(struct cli_pipeline *pipeline);
-static void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c);
+static struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent,
+                                                     struct cli_command *c);
 static void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp);
 static int cli_socket_wait(int sockfd, struct timeval *tm);
 
@@ -200,15 +201,14 @@ static ssize_t _write(int fd, const void *buf, size_t count) {
   return written;
 }
 
-char *cli_command_name(struct cli_def *cli, struct cli_command *command) {
+char *cli_int_command_name(struct cli_def *cli, struct cli_command *command) {
   char *name;
   char *o;
 
-  if (cli->commandname) {
-    free(cli->commandname);
-    cli->commandname = NULL;
+  if (command->full_command_name) {
+    free(command->full_command_name);
+    command->full_command_name = NULL;
   }
-  name = cli->commandname;
 
   if (!(name = calloc(1, 1))) return NULL;
 
@@ -222,8 +222,11 @@ char *cli_command_name(struct cli_def *cli, struct cli_command *command) {
     command = command->parent;
     free(o);
   }
-  cli->commandname = name;
   return name;
+}
+
+char *cli_command_name(struct cli_def *cli, struct cli_command *command) {
+  return command->full_command_name;
 }
 
 void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(const char *, const char *)) {
@@ -371,13 +374,20 @@ int cli_set_configmode(struct cli_def *cli, int mode, const char *config_desc) {
   return old;
 }
 
-void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c) {
+struct cli_command *cli_register_command_core(struct cli_def *cli, struct cli_command *parent, struct cli_command *c) {
   struct cli_command *p = NULL;
 
-  if (!c) return;
+  if (!c) return NULL;
 
   c->parent = parent;
 
+  /* Go build the 'full command name' now that told it who its parent is.
+   * If this fails, clean it up and return a NULL w/o proceeding.
+   */
+  if (!(c->full_command_name = cli_int_command_name(cli, c))) {
+    cli_free_command(cli, c);
+    return NULL;
+  }
   /*
    * Figure out we have a chain, or would be the first element on it.
    * If we'd be the first element, assign as such.
@@ -408,7 +418,7 @@ void cli_register_command_core(struct cli_def *cli, struct cli_command *parent, 
     p->next = c;
     c->previous = p;
   }
-  return;
+  return c;
 }
 
 struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command *parent, const char *command,
@@ -434,8 +444,7 @@ struct cli_command *cli_register_command(struct cli_def *cli, struct cli_command
     return NULL;
   }
 
-  cli_register_command_core(cli, parent, c);
-  return c;
+  return cli_register_command_core(cli, parent, c);
 }
 
 static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
@@ -450,7 +459,7 @@ static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
   free(cmd->command);
   if (cmd->help) free(cmd->help);
   if (cmd->optargs) cli_unregister_all_optarg(cmd);
-
+  if (cmd->full_command_name) free(cmd->full_command_name);
   /*
    * Ok, update the pointers of anyone who pointed to us.
    * We have 3 pointers to worry about - parent, previous, and next.
@@ -592,7 +601,7 @@ struct cli_def *cli_init() {
 
   cli->buf_size = 1024;
   if (!(cli->buffer = calloc(cli->buf_size, 1))) {
-    free_z(cli);
+    cli_done(cli);
     return 0;
   }
   cli->telnet_protocol = 1;
@@ -607,17 +616,29 @@ struct cli_def *cli_init() {
   cli_register_command(cli, 0, "disable", cli_disable, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Turn off privileged commands");
 
   c = cli_register_command(cli, 0, "configure", 0, PRIVILEGE_PRIVILEGED, MODE_EXEC, "Enter configuration mode");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_command(cli, c, "terminal", cli_int_configure_terminal, PRIVILEGE_PRIVILEGED, MODE_EXEC,
                        "Conlfigure from the terminal");
 
   // And now the built in filters
   c = cli_register_filter(cli, "begin", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Begin with lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "range_start", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Begin showing lines that match", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "between", cli_range_filter_init, cli_range_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Between lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "range_start", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Begin showing lines that match", NULL, NULL, NULL);
   cli_register_optarg(c, "range_end", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
@@ -628,16 +649,28 @@ struct cli_def *cli_init() {
 
   c = cli_register_filter(cli, "exclude", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Exclude lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
                       MODE_ANY, "Search pattern", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "include", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
                       MODE_ANY, "Search pattern", NULL, NULL, NULL);
 
   c = cli_register_filter(cli, "grep", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match regex (options: -v, -i, -e)");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_flags", CLI_CMD_HYPHENATED_OPTION, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Search flags (-[ivx]", NULL, cli_search_flags_validator, NULL);
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
@@ -645,6 +678,10 @@ struct cli_def *cli_init() {
 
   c = cli_register_filter(cli, "egrep", cli_match_filter_init, cli_match_filter, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                           "Include lines that match extended regex");
+  if (!c) {
+    cli_done(cli);
+    return 0;
+  }
   cli_register_optarg(c, "search_flags", CLI_CMD_HYPHENATED_OPTION, PRIVILEGE_UNPRIVILEGED, MODE_ANY,
                       "Search flags (-[ivx]", NULL, cli_search_flags_validator, NULL);
   cli_register_optarg(c, "search_pattern", CLI_CMD_ARGUMENT | CLI_CMD_REMAINDER_OF_LINE, PRIVILEGE_UNPRIVILEGED,
@@ -700,7 +737,6 @@ int cli_done(struct cli_def *cli) {
 
   if (cli->buildmode) cli_int_free_buildmode(cli);
   cli_unregister_tree(cli, cli->commands, CLI_ANY_COMMAND);
-  free_z(cli->commandname);
   free_z(cli->modestring);
   free_z(cli->banner);
   free_z(cli->promptchar);
@@ -827,6 +863,7 @@ static char *join_words(int argc, char **argv) {
   }
 
   p = malloc(len + 1);
+  if (!p) return NULL;
   p[0] = 0;
 
   for (i = 0; i < argc; i++) {
@@ -948,8 +985,8 @@ out:
       // Special case for getting help with no defined optargs....
       comphelp->num_entries = -1;
     }
-    if  (stage->status) {
-      // if we had an error here we need to redraw the commandline 
+    if (stage->status) {
+      // if we had an error here we need to redraw the commandline
       cli_reprompt(cli);
     }
   }
@@ -994,6 +1031,7 @@ void cli_regular_interval(struct cli_def *cli, int seconds) {
 #define DES_PREFIX "{crypt}"  // To distinguish clear text from DES crypted
 #define MD5_PREFIX "$1$"
 
+// returns 0 on fail/error, 1 if password checks out
 static int pass_matches(const char *pass, const char *attempt) {
   int des;
   if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX) - 1))) pass += sizeof(DES_PREFIX) - 1;
@@ -1002,7 +1040,10 @@ static int pass_matches(const char *pass, const char *attempt) {
   // TODO(dparrish): Find a small crypt(3) function for use on windows
   if (des || !strncmp(pass, MD5_PREFIX, sizeof(MD5_PREFIX) - 1)) attempt = crypt(attempt, pass);
 #endif
-
+  if (!attempt) {
+    // silent return here...
+    return 0;
+  }
   return !strcmp(pass, attempt);
 }
 
@@ -1057,6 +1098,16 @@ int cli_loop(struct cli_def *cli, int sockfd) {
   }
 #endif
 
+#ifndef LIBCLI_USE_POLL
+  /* Do a range check *early*, and punt if we were passed a file descriptor
+   * that is out of the valid range
+   */
+  if (sockfd >= FD_SETSIZE) {
+    fprintf(stderr, "CLI_LOOP() called with sockfd > FD_SETSIZE - aborting\n");
+    cli_error(cli, "CLI_LOOP() called with sockfd > FD_SETSIZE - exiting cli_loop\n");
+    return CLI_ERROR;
+  }
+#endif
   setbuf(cli->client, NULL);
   if (cli->banner) cli_error(cli, "%s", cli->banner);
 
@@ -1892,9 +1943,9 @@ int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
   if (!state) return CLI_ERROR;
 
   if (!strcmp(cli->pipeline->current_stage->words[0], "include")) {
-    state->match.string = strdup(search_pattern);
+    state->match.string = search_pattern;
   } else if (!strcmp(cli->pipeline->current_stage->words[0], "exclude")) {
-    state->match.string = strdup(search_pattern);
+    state->match.string = search_pattern;
     state->flags = MATCH_INVERT;
 #ifndef WIN32
   } else {
@@ -1943,10 +1994,7 @@ int cli_match_filter(UNUSED(struct cli_def *cli), const char *string, void *data
   int r = CLI_ERROR;
 
   if (!string) {
-    if (state->flags & MATCH_REGEX)
-      regfree(&state->match.re);
-    else
-      free(state->match.string);
+    if (state->flags & MATCH_REGEX) regfree(&state->match.re);
 
     free(state);
     return CLI_OK;
@@ -1976,10 +2024,13 @@ struct cli_range_filter_state {
 
 int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt) {
   struct cli_range_filter_state *state;
-  char *from = strdup(cli_get_optarg_value(cli, "range_start", NULL));
-  char *to = strdup(cli_get_optarg_value(cli, "range_end", NULL));
+  char *from = cli_get_optarg_value(cli, "range_start", NULL);
+  char *to = cli_get_optarg_value(cli, "range_end", NULL);
 
   // Do not have to check from/to since we would not have gotten here if we were missing a required argument.
+  // Note that since those pointers are not NULL, we don't have to strdup them or free them - just use the pointer
+  //    from the command line processing and continue
+
   filt->filter = cli_range_filter;
   filt->data = state = calloc(sizeof(struct cli_range_filter_state), 1);
   if (state) {
@@ -1987,8 +2038,6 @@ int cli_range_filter_init(struct cli_def *cli, int argc, char **argv, struct cli
     state->to = to;
     return CLI_OK;
   } else {
-    free_z(from);
-    free_z(to);
     return CLI_ERROR;
   }
 }
@@ -1998,8 +2047,6 @@ int cli_range_filter(UNUSED(struct cli_def *cli), const char *string, void *data
   int r = CLI_ERROR;
 
   if (!string) {
-    free_z(state->from);
-    free_z(state->to);
     free_z(state);
     return CLI_OK;
   }
@@ -2099,8 +2146,7 @@ struct cli_command *cli_register_filter(struct cli_def *cli, const char *command
   }
 
   // Filters are all registered at the top level.
-  cli_register_command_core(cli, NULL, c);
-  return c;
+  return cli_register_command_core(cli, NULL, c);
 }
 
 int cli_unregister_filter(struct cli_def *cli, const char *command) {
@@ -2327,7 +2373,6 @@ void cli_int_free_buildmode(struct cli_def *cli) {
   if (!cli || !cli->buildmode) return;
   cli_unregister_tree(cli, cli->commands, CLI_BUILDMODE_COMMAND);
   cli->mode = cli->buildmode->mode;
-  free_z(cli->buildmode->cname);
   free_z(cli->buildmode->mode_text);
   cli_int_free_found_optargs(&cli->buildmode->found_optargs);
   free_z(cli->buildmode);
@@ -2336,11 +2381,12 @@ void cli_int_free_buildmode(struct cli_def *cli) {
 int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stage, char *mode_text) {
   struct cli_optarg *optarg;
   struct cli_command *c;
+  struct cli_optarg *o;
   struct cli_buildmode *buildmode;
   struct cli_optarg *buildmodeOptarg = NULL;
   int rc = CLI_BUILDMODE_START;
 
-  if (!cli || !(buildmode = (struct cli_buildmode *)calloc(1, sizeof(struct cli_buildmode)))) {
+  if (!(buildmode = (struct cli_buildmode *)calloc(1, sizeof(struct cli_buildmode)))) {
     cli_error(cli, "Unable to build buildmode mode for command %s", stage->command->command);
     rc = CLI_BUILDMODE_ERROR;
     goto out;
@@ -2405,19 +2451,40 @@ int cli_int_enter_buildmode(struct cli_def *cli, struct cli_pipeline_stage *stag
       }
     }
   }
-  cli->buildmode->cname = strdup(cli_command_name(cli, stage->command));
+  cli->buildmode->cname = cli_command_name(cli, stage->command);
   // Now add the four 'always there' commands to cancel current mode and to execute the command, show settings, and
   // unset
-  cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, 0, PRIVILEGE_UNPRIVILEGED,
-                                     cli->mode, "Cancel command");
-  cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_execute_cback, 0, PRIVILEGE_UNPRIVILEGED,
-                                     cli->mode, "Execute command");
-  cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, 0, PRIVILEGE_UNPRIVILEGED,
-                                     cli->mode, "Show current settings");
+  c = cli_int_register_buildmode_command(cli, NULL, "cancel", cli_int_buildmode_cancel_cback, 0, PRIVILEGE_UNPRIVILEGED,
+                                         cli->mode, "Cancel command");
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
+  c = cli_int_register_buildmode_command(cli, NULL, "execute", cli_int_buildmode_execute_cback, 0,
+                                         PRIVILEGE_UNPRIVILEGED, cli->mode, "Execute command");
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
+  c = cli_int_register_buildmode_command(cli, NULL, "show", cli_int_buildmode_show_cback, 0, PRIVILEGE_UNPRIVILEGED,
+                                         cli->mode, "Show current settings");
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
   c = cli_int_register_buildmode_command(cli, NULL, "unset", cli_int_buildmode_unset_cback, 0, PRIVILEGE_UNPRIVILEGED,
                                          cli->mode, "Unset a setting");
-  cli_register_optarg(c, "setting", CLI_CMD_ARGUMENT | CLI_CMD_DO_NOT_RECORD, PRIVILEGE_UNPRIVILEGED, cli->mode,
-                      "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator, NULL);
+  if (!c) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
+  o = cli_register_optarg(c, "setting", CLI_CMD_ARGUMENT | CLI_CMD_DO_NOT_RECORD, PRIVILEGE_UNPRIVILEGED, cli->mode,
+                          "setting to clear", cli_int_buildmode_unset_completor, cli_int_buildmode_unset_validator,
+                          NULL);
+  if (!o) {
+    rc = CLI_BUILDMODE_ERROR;
+    goto out;
+  }
 
 out:
   // And lastly set the initial help menu for the unset command
@@ -2457,8 +2524,7 @@ struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, stru
   }
 
   // Buildmode commmands are all registered at the top level
-  cli_register_command_core(cli, NULL, c);
-  return c;
+  return cli_register_command_core(cli, NULL, c);
 }
 
 int cli_int_execute_buildmode(struct cli_def *cli) {
@@ -2468,6 +2534,10 @@ int cli_int_execute_buildmode(struct cli_def *cli) {
   char *value = NULL;
 
   cmdline = strdup(cli_command_name(cli, cli->buildmode->command));
+  if (!cmdline) {
+    cli_error(cli, "Unable to allocate memory to process buildmode commandline");
+    rc = CLI_ERROR;
+  }
   for (optarg = cli->buildmode->command->optargs; rc == CLI_OK && optarg; optarg = optarg->next) {
     value = NULL;
     do {
@@ -2483,16 +2553,16 @@ int cli_int_execute_buildmode(struct cli_def *cli) {
       } else if (value) {
         if (optarg->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_ARGUMENT)) {
           if (!(cmdline = cli_int_buildmode_extend_cmdline(cmdline, value))) {
-            cli_error(cli, "Unable to append to building commandlne");
+            cli_error(cli, "Unable to allocate memory to process buildmode commandline");
             rc = CLI_ERROR;
           }
         } else {
           if (!(cmdline = cli_int_buildmode_extend_cmdline(cmdline, optarg->name))) {
-            cli_error(cli, "Unable to append to building commandlne");
+            cli_error(cli, "Unable to allocate memory to process buildmode commandline");
             rc = CLI_ERROR;
           }
           if (!(cmdline = cli_int_buildmode_extend_cmdline(cmdline, value))) {
-            cli_error(cli, "Unable to append to building commandlne");
+            cli_error(cli, "Unable to allocate memory to process buildmode commandline");
             rc = CLI_ERROR;
           }
         }
@@ -2806,9 +2876,10 @@ static int cli_int_locate_command(struct cli_def *cli, struct cli_command *comma
           if (c->callback) {
             rc = CLI_OK;
             goto CORRECT_CHECKS;
-          } else {
-            cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", stage->words[start_word]);
           }
+          // show the command from word 0 up until the 'bad' word at start_word+1
+          cli_error(cli, "Invalid command \"%s %s\"", cli_command_name(cli, c), stage->words[start_word + 1]);
+          return CLI_ERROR;
         }
         return rc;
       }
@@ -2824,6 +2895,7 @@ static int cli_int_locate_command(struct cli_def *cli, struct cli_command *comma
         stage->command = c;
         stage->first_unmatched = start_word + 1;
         stage->first_optarg = stage->first_unmatched;
+        // cli_int_parse_optargs will display any detected errors...
         cli_int_parse_optargs(cli, stage, c, '\0', NULL);
         rc = stage->status;
       }
@@ -2847,8 +2919,8 @@ static int cli_int_locate_command(struct cli_def *cli, struct cli_command *comma
     goto AGAIN;
   }
 
-  if (start_word == 0)
-    cli_error(cli, "Invalid %s \"%s\"", commands->parent ? "argument" : "command", stage->words[start_word]);
+  // display this if we matched against absolutely nothing....
+  if (start_word == 0) cli_error(cli, "Invalid command \"%s\"", stage->words[start_word]);
 
   return CLI_ERROR_ARG;
 }
@@ -2909,7 +2981,6 @@ void cli_int_free_pipeline(struct cli_pipeline *pipeline) {
   for (i = 0; i < pipeline->num_words; i++) free_z(pipeline->words[i]);
   free_z(pipeline->cmdline);
   free_z(pipeline);
-  pipeline = NULL;
 }
 
 void cli_int_show_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline) {
@@ -3056,6 +3127,13 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
    */
 
   do {
+    // note - 22 is used because name is always indented 2 spaces
+    if ((nameptr != emptystring) && (namewidth > 22)) {
+      if (asprintf(&line, "%s", nameptr) < 0) break;
+      cli_add_comphelp_entry(comphelp, line);
+      nameptr = emptystring;
+      namewidth = 22;
+    }
     toprint = strlen(helpptr);
     if (toprint > availwidth) {
       toprint = availwidth;
@@ -3079,6 +3157,8 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
 
     nameptr = emptystring;
     helpptr += toprint;
+    // regardless of how long the command is, indent by 20 chars on all following lines
+    namewidth = 22;
     // advance to first non whitespace
     while (helpptr && isspace(*helpptr)) helpptr++;
   } while (*helpptr);
@@ -3221,7 +3301,7 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
 static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage *stage, struct cli_command *cmd,
                                   char lastchar, struct cli_comphelp *comphelp) {
   struct cli_optarg *optarg = NULL, *oaptr = NULL;
-  int word_idx, word_incr, candidate_idx;
+  int word_idx, value_idx, word_incr, candidate_idx;
   struct cli_optarg *candidates[CLI_MAX_LINE_WORDS];
   char *value;
   int num_candidates = 0;
@@ -3354,6 +3434,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
 
     // Set some values for use later - makes code much easier to read
     value = stage->words[word_idx];
+    value_idx = word_idx;
     oaptr = candidates[0];
     validator = oaptr->validator;
     if ((oaptr->flags & (CLI_CMD_OPTIONAL_FLAG | CLI_CMD_ARGUMENT) && word_idx == (stage->num_words - 1)) ||
@@ -3371,6 +3452,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         goto done;
       }
       value = stage->words[word_idx + 1];
+      value_idx = word_idx + 1;
     }
 
     /*
@@ -3391,6 +3473,13 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
         if (oaptr->flags & CLI_CMD_REMAINDER_OF_LINE) {
           char *combined = NULL;
           combined = join_words(stage->num_words - word_idx, stage->words + word_idx);
+          if (!combined) {
+            cli_error(cli, "%sUnable to allocate memory for command processing", lastchar == '\0' ? "" : "\n");
+            cli_reprompt(cli);
+            stage->error_word = stage->words[word_idx];
+            stage->status = CLI_ERROR;
+            goto done;
+          }
           set_value_return = cli_set_optarg_value(cli, oaptr->name, combined, 0);
           free_z(combined);
         } else {
@@ -3408,7 +3497,7 @@ static void cli_int_parse_optargs(struct cli_def *cli, struct cli_pipeline_stage
       }
     } else {
       cli_error(cli, "%sProblem parsing command setting %s with value %s", lastchar == '\0' ? "" : "\n", oaptr->name,
-                stage->words[word_idx]);
+                stage->words[value_idx]);
       cli_reprompt(cli);
       stage->error_word = stage->words[word_idx];
       stage->status = CLI_ERROR;

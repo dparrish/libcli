@@ -13,7 +13,7 @@ extern "C" {
 
 #define LIBCLI_VERSION_MAJOR 1
 #define LIBCLI_VERISON_MINOR 10
-#define LIBCLI_VERISON_REVISION 3
+#define LIBCLI_VERISON_REVISION 5
 #define LIBCLI_VERSION ((LIBCLI_VERSION_MAJOR << 16) | (LIBCLI_VERSION_MINOR << 8) | LIBCLI_VERSION_REVISION)
 
 #define CLI_OK 0
@@ -29,6 +29,7 @@ extern "C" {
 #define CLI_BUILDMODE_EXTEND -10
 #define CLI_BUILDMODE_CANCEL -11
 #define CLI_BUILDMODE_EXIT -12
+#define CLI_INCOMPLETE_COMMAND -13
 
 #define MAX_HISTORY 256
 
@@ -70,7 +71,7 @@ struct cli_def {
   /* internal buffers */
   void *conn;
   void *service;
-  char *commandname;  // temporary buffer for cli_command_name() to prevent leak
+//  char *commandname;  // temporary buffer for cli_command_name() to prevent leak
   char *buffer;
   unsigned buf_size;
   struct timeval timeout_tm;
@@ -101,6 +102,7 @@ enum command_types {
 
 struct cli_command {
   char *command;
+  char *full_command_name;
   int (*callback)(struct cli_def *, const char *, char **, int);
   unsigned int unique_len;
   char *help;

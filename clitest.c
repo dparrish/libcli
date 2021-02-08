@@ -329,7 +329,37 @@ int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const
   return CLI_OK;
 }
 
+int cmd_deep_dive(struct cli_def *cli, const char *command, char *argv[], int argc) {
+  cli_print(cli, "Raw commandline was <%s>", cli->pipeline->cmdline);
+  return CLI_OK;
+}
+
+int int_validator(struct cli_def *cli, const char *name, const char *value) {
+  // Verify 'value' is a positive number
+  long len;
+  char *endptr;
+  int rc = CLI_OK;
+
+  printf("int_validator called\n");
+  errno = 0;
+  len = strtol(value, &endptr, 10);
+  if ((endptr == value) || (*endptr != '\0') || ((errno == ERANGE) && ((len == LONG_MIN) || (len == LONG_MAX))))
+    return CLI_ERROR;
+  return rc;
+}
+
 int cmd_string(struct cli_def *cli, const char *command, char *argv[], int argc) {
+  int i;
+  cli_print(cli, "Raw commandline was <%s>", cli->pipeline->cmdline);
+  cli_print(cli, "Value for text argument is <%s>", cli_get_optarg_value(cli, "text", NULL));
+
+  cli_print(cli, "Found %d 'extra' arguments after 'text' argument was processed", argc);
+  for (i = 0; i != argc; i++) {
+    cli_print(cli, "  Extra arg %d = <%s>", i + 1, argv[i]);
+  }
+  return CLI_OK;
+}
+int cmd_long_name(struct cli_def *cli, const char *command, char *argv[], int argc) {
   int i;
   cli_print(cli, "Raw commandline was <%s>", cli->pipeline->cmdline);
   cli_print(cli, "Value for text argument is <%s>", cli_get_optarg_value(cli, "text", NULL));
@@ -447,6 +477,22 @@ void run_child(int x) {
   cli_set_context(cli, (void *)&myctx);
   cli_register_command(cli, NULL, "context", cmd_context, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
                        "Test a user-specified context");
+
+  struct cli_command *d1, *d2, *d3;
+
+  d1 = cli_register_command(cli, NULL, "deep", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "top level deep dive cmd");
+  d2 = cli_register_command(cli, d1, "dive", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "mid level dep dive cmd");
+  d3 = cli_register_command(cli, d2, "cmd", cmd_deep_dive, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                            "bottom level dep dive cmd");
+  o = cli_register_optarg(d3, "howdeep", CLI_CMD_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, "Specify how deep", NULL,
+                          int_validator, NULL);
+  o = cli_register_optarg(d3, "howlong", CLI_CMD_OPTIONAL_ARGUMENT, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                          "Specify how long", NULL, int_validator, NULL);
+
+  c = cli_register_command(
+      cli, NULL, "serioously_long_cammand_to_test_with", cmd_long_name, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+      "show long command name with "
+      "newline\nand_a_really_long_line_that_is_much_longer_than_80_columns_to_show_that_wrap_case");
 
   cli_set_auth_callback(cli, check_auth);
   cli_set_enable_callback(cli, check_enable);

@@ -1,4 +1,4 @@
-Version: 1.10.4
+Version: 1.10.5
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,37 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Jan 27 2021 Gerrit Huizenga <gerrit@us.ibm.com> 1.10.5
+- Add ppc64le to travis builds
+
+* Wed Jan 27 2021 Rob Sanders <rsanders@forcepoint.com> 1.10.5
+- Add additional range chack to cli_loop() if the 'select' call is used, and
+  punt if sockfd is out of range
+- Add preprocessor check (LIBCLI_USE_POLL) to toggle between using poll or
+  select in cli_loop().  Code submitted on github by @belge-sel.
+- Fix possible error where cli_command_name() returns a NULL by
+  generating full command name when a command is registered. 
+  Note - removed cli->commandname member
+
+* Thu Jan 14 2021 Rob Sanders <rsanders@forcepoint.com> 1.10.5
+- Fix issue where the help for 'long command name' winds up running into
+  the actual help text w/o any spaces.  Now a long command will be on a line
+  by itself with the line having the indented help text.
+- Change error notification of command processing to make it clearer where
+  an error was found when processing a command, rather than displaying
+  all of the command elements from the offending word back to the top 
+  level command. 
+- Fix incorrect internal version defined in libcli.h for the 1.10.4 release
+- Minor change in makefile to create rpm from source code
+- Minor additions to clitest to show 'fixed' behavior above.
+
+* Mon Jan 11 2021 Rob Sanders <rsanders@forcepoint.com> 1.10.5
+- Fix display issue when optional argument fails validation, so it will show 
+  the invalid *value* rather than repeat the name
+
+* Sun Jun 7 2020 Danial Zaoui <daniel.zaoui@yahoo.com>
+- Fix function prototype in libcli.h to avoid error when compiled with 'strict-prototypes'
+
 * Tue Mar 3 2020 Rob Sanders <rsanders@forcepoint.com> 1.10.4-1
 - Fix segfault issue found during tab/help processing
 - Minor fix of version on previous changelog record
