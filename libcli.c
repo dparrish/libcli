@@ -2912,6 +2912,7 @@ static int cli_int_locate_command(struct cli_def *cli, struct cli_command *comma
   // Drop out of config submode if we have matched command on MODE_CONFIG
   if (again_config) {
     c = again_config;
+    cli_set_configmode(cli, MODE_CONFIG, NULL);
     goto AGAIN;
   }
   if (again_any) {

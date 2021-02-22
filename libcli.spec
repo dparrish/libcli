@@ -1,4 +1,4 @@
-Version: 1.10.5
+Version: 1.10.6
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,11 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Mon Feb 22 2021 Rob Sanders <rsanders.forcepoint.com> 1.10.6
+- Fix bug when a command not found in the current mode, but is found
+  in the CONFIG_MODE, which would resultin an an infinate loop.  Bug
+  reported by Stefan Mächler (github @machste).
+
 * Wed Jan 27 2021 Gerrit Huizenga <gerrit@us.ibm.com> 1.10.5
 - Add ppc64le to travis builds
 
