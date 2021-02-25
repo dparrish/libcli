@@ -1,4 +1,4 @@
-Version: 1.10.6
+Version: 1.10.7
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,11 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Feb 24 2021 Rob Sanders <rsanders.forcepoint.com> 1.10.7
+- Fix bug were an extra newline was being inserted on every line
+  when help was being requested for options and arguments
+- Fix memory leak in linewrapping code for help items
+
 * Mon Feb 22 2021 Rob Sanders <rsanders.forcepoint.com> 1.10.6
 - Fix bug when a command not found in the current mode, but is found
   in the CONFIG_MODE, which would resultin an an infinate loop.  Bug
