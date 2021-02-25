@@ -737,6 +737,7 @@ int cli_done(struct cli_def *cli) {
 
   if (cli->buildmode) cli_int_free_buildmode(cli);
   cli_unregister_tree(cli, cli->commands, CLI_ANY_COMMAND);
+  free_z(cli->promptchar);
   free_z(cli->modestring);
   free_z(cli->banner);
   free_z(cli->promptchar);
@@ -3142,6 +3143,7 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
     if ((nameptr != emptystring) && (strlen(nameptr) > MAXWIDTHCOL1)) {
       if (asprintf(&line, "%s", nameptr) < 0) break;
       cli_add_comphelp_entry(comphelp, line);
+      free_z(line);
       nameptr = emptystring;
       namewidth = MAXWIDTHCOL1;
     }
