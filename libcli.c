@@ -962,7 +962,7 @@ void cli_get_completions(struct cli_def *cli, const char *command, char lastchar
         }
       }
       if (asprintf(&nameptr, "%s%s%s", delim_start, c->command, delim_end) != -1) {
-        if (asprintf(&strptr, "  %-20s", nameptr) != -1) {
+        if (asprintf(&strptr, "  %s", nameptr) != -1) {
           cli_int_wrap_help_line(strptr, c->help, comphelp);
           free_z(strptr);
         }
@@ -3106,9 +3106,22 @@ int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline)
 }
 
 /*
- *  Attemp quick dirty wrapping of helptext taking into account the offset from name, embedded
- *  cr/lf in helptext, and trying to split on last white-text before the margin
+ *  Attempt quick dirty wrapping of helptext taking into account the offset from name, embedded
+ *  cr/lf in helptext, and trying to split on last white-text before the right margin.  If there is
+ *  no identifiable whitespace to split on, then the split will be done on the last character to fit
+ *  that line (currently max line with is 80 characters).  
+ *  The firstcolumn width will be a greater of 22 characters or the width of nameptr, which ever is 
+ *  greater, and will be offset from the rest of the line by one space.  However, if nameptr is
+ *  greater than 22 characters it will be put on a line by itself.  The first column will be formatted
+ *  as spaces (22 of em) for all subsequent lines.
+.
+ *  This routine assumes any 'indenting' of the nameptr field has already been done, and is solely
+ *  concerned about wrapping the combination of nameptr and helpptr to look 'nice'.  
  */
+ 
+#define MAX(a,b) ((a) >(b) ? (a) : (b))
+#define MAXWIDTHCOL1 22
+
 void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp) {
   int maxwidth = 80;  // temporary assumption, to be fixed later when libcli 'understands' screen dimensions
   int availwidth;
@@ -3117,8 +3130,6 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
   char *crlf;
   char *line;
   char emptystring[] = "";
-  namewidth = strlen(nameptr);
-  availwidth = maxwidth - namewidth;
 
   if (!helpptr) helpptr = emptystring;
   /*
@@ -3128,13 +3139,14 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
    */
 
   do {
-    // note - 22 is used because name is always indented 2 spaces
-    if ((nameptr != emptystring) && (namewidth > 22)) {
+    if ((nameptr != emptystring) && (strlen(nameptr) > MAXWIDTHCOL1)) {
       if (asprintf(&line, "%s", nameptr) < 0) break;
       cli_add_comphelp_entry(comphelp, line);
       nameptr = emptystring;
-      namewidth = 22;
+      namewidth = MAXWIDTHCOL1;
     }
+    namewidth = MAX(MAXWIDTHCOL1,strlen(nameptr));
+    availwidth = maxwidth - namewidth -1; // subtract 1 for space separating col1 from rest of line
     toprint = strlen(helpptr);
     if (toprint > availwidth) {
       toprint = availwidth;
@@ -3152,7 +3164,7 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
       }
     }
 
-    if (asprintf(&line, "%*.*s%.*s", namewidth, namewidth, nameptr, toprint, helpptr) < 0) break;
+    if (asprintf(&line, "%-*.*s %.*s", namewidth, namewidth, nameptr, toprint, helpptr) < 0) break;
     cli_add_comphelp_entry(comphelp, line);
     free_z(line);
 
@@ -3267,7 +3279,7 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
     do {
       char *leftcolumn;
       if (asprintf(&tname, "%s%s%s", delim_start, nameptr, delim_end) == -1) break;
-      if (asprintf(&leftcolumn, "%*.*s%-20s ", indent, indent, "", tname) == -1) break;
+      if (asprintf(&leftcolumn, "%*.*s%s", indent, indent, "", tname) == -1) break;
 
       cli_int_wrap_help_line(leftcolumn, helpptr, comphelp);
 
