@@ -89,3 +89,13 @@ rpm: rpmprep
 lint:
 	clang-tidy -quiet -warnings-as-errors *.c *.h
 
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/include/libcli.h
+  ifeq (1,$(STATIC_LIB))
+	rm -f $(DESTDIR)$(PREFIX)/lib/$(LIB_STATIC)
+  endif
+  ifeq (1,$(DYNAMIC_LIB))
+	rm -f $(DESTDIR)$(PREFIX)/lib/$(LIB).$(MAJOR).$(MINOR).$(REVISION)
+	rm -f $(DESTDIR)$(PREFIX)/lib/$(LIB).$(MAJOR).$(MINOR)
+	rm -f $(DESTDIR)$(PREFIX)/lib/$(LIB)
+  endif
