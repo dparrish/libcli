@@ -83,6 +83,7 @@ struct cli_def {
   time_t idle_timeout;
   int (*idle_timeout_callback)(struct cli_def *);
   time_t last_action;
+  time_t last_regular;
   int telnet_protocol;
   void *user_context;
   struct cli_optarg_pair *found_optargs;
