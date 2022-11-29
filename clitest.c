@@ -307,8 +307,32 @@ int side_length_validator(struct cli_def *cli, const char *name, const char *val
   return rc;
 }
 
+const char *TransparentColors[] = {
+    "clear",
+    "transparent",
+    "see-through",
+};
+
+int transparent_completor(struct cli_def *cli, const char *name, const char *word, struct cli_comphelp *comphelp) {
+  // Attempt to show matches against the following color strings
+  const char **color;
+  int rc = CLI_OK;
+  printf("transparent_completor called with <%s>\n", word);
+  for (color = TransparentColors; *color && (rc == CLI_OK); color++) {
+    if (!word || !strncmp(*color, word, strlen(word))) {
+      rc = cli_add_comphelp_entry(comphelp, *color);
+    }
+  }
+  return rc;
+}
 int transparent_validator(struct cli_def *cli, const char *name, const char *value) {
-  return strcasecmp("transparent", value) ? CLI_ERROR : CLI_OK;
+  const char **color;
+  int rc = CLI_ERROR;
+  printf("color_validator called for %s\n", name);
+  for (color = TransparentColors; *color; color++) {
+    if (!strcmp(value, *color)) return CLI_OK;
+  }
+  return rc;
 }
 
 int check1_validator(struct cli_def *cli, UNUSED(const char *name), UNUSED(const char *value)) {
@@ -419,7 +443,7 @@ void run_child(int x) {
       "Calculate perimeter of polygon\nhas embedded "
       "newline\nand_a_really_long_line_that_is_much_longer_than_80_columns_to_show_that_wrap_case");
   o = cli_register_optarg(c, "transparent", CLI_CMD_OPTIONAL_FLAG, PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
-                          "Set transparent flag", NULL, NULL, NULL);
+                          "Set transparent flag", transparent_completor, transparent_validator, NULL);
   cli_optarg_addhelp(o, "transparent", "(any case)set to transparent");
 
   cli_register_optarg(
