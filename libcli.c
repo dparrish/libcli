@@ -3110,17 +3110,17 @@ int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline)
  *  Attempt quick dirty wrapping of helptext taking into account the offset from name, embedded
  *  cr/lf in helptext, and trying to split on last white-text before the right margin.  If there is
  *  no identifiable whitespace to split on, then the split will be done on the last character to fit
- *  that line (currently max line with is 80 characters).  
- *  The firstcolumn width will be a greater of 22 characters or the width of nameptr, which ever is 
+ *  that line (currently max line with is 80 characters).
+ *  The firstcolumn width will be a greater of 22 characters or the width of nameptr, which ever is
  *  greater, and will be offset from the rest of the line by one space.  However, if nameptr is
  *  greater than 22 characters it will be put on a line by itself.  The first column will be formatted
  *  as spaces (22 of em) for all subsequent lines.
 .
  *  This routine assumes any 'indenting' of the nameptr field has already been done, and is solely
- *  concerned about wrapping the combination of nameptr and helpptr to look 'nice'.  
+ *  concerned about wrapping the combination of nameptr and helpptr to look 'nice'.
  */
- 
-#define MAX(a,b) ((a) >(b) ? (a) : (b))
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MAXWIDTHCOL1 22
 
 void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp) {
@@ -3147,8 +3147,8 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
       nameptr = emptystring;
       namewidth = MAXWIDTHCOL1;
     }
-    namewidth = MAX(MAXWIDTHCOL1,strlen(nameptr));
-    availwidth = maxwidth - namewidth -1; // subtract 1 for space separating col1 from rest of line
+    namewidth = MAX(MAXWIDTHCOL1, strlen(nameptr));
+    availwidth = maxwidth - namewidth - 1;  // subtract 1 for space separating col1 from rest of line
     toprint = strlen(helpptr);
     if (toprint > availwidth) {
       toprint = availwidth;
@@ -3196,7 +3196,6 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
     if (!(anchor_word && !strncmp(anchor_word, optarg->name, strlen(anchor_word)))) {
       delim_start = DELIM_OPT_START;
       delim_end = DELIM_OPT_END;
-      get_completions = NULL;  // No point, completor of field is the name itself
     }
   } else if (optarg->flags & CLI_CMD_HYPHENATED_OPTION) {
     delim_start = DELIM_OPT_START;
