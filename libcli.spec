@@ -1,4 +1,4 @@
-Version: 1.10.7
+Version: 1.10.8
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,17 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Thu Dec 1 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Add backward compatibility for LIBCLI versions numbers (issue #85) - initial code provided by github user JereLeppanen on 27Apr2022, slightly tweaked by rsanders
+- applied fixes for misspellings on LIBCLI version #defines (issue #75) - fix provided on github by belge-sel on 19Sep2021 
+- Fix for printing (issue #79) where text left in buffer (from call to cli_bufprint for example) is discarded instead of preserved.  Code provided on github by JereLeppanen on 27Apr2021
+
+* Tue Nov 29 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8 
+- Fix for issue #82 (OPTIONAL_FLAG tab completion not honoring user provided callback)
+
+* Wed Nov 16 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Doxygen headers for libli.c routines - code provided on github by mpzanoosi on 14May2021
+
 * Wed Feb 24 2021 Rob Sanders <rsanders.forcepoint.com> 1.10.7
 - Fix bug were an extra newline was being inserted on every line
   when help was being requested for options and arguments
@@ -241,7 +252,7 @@ rm -rf $RPM_BUILD_ROOT
 - Disable TAB completion during username entry
 
 * Fri May  2 2008 David Parrish <david@dparrish.com> 1.9.2-1
-- Add configurable timeout for cli_regular() - defaults to 1 second
+- Add configurable timeout for cl7i_regular() - defaults to 1 second
 - Add idle timeout support
 
 * Thu Jul  5 2007 Brendan O'Dea <bod@optus.net> 1.9.1-1
