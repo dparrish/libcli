@@ -1856,11 +1856,23 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
 
   n = vasprintf(&p, format, ap);
   if (n < 0) return;
-  if (cli->buffer) free(cli->buffer);
-  cli->buffer = p;
-  cli->buf_size = n;
+  if (cli->buffer) {
+    int len = strlen(cli->buffer);
+    unsigned size = len + n + 1;
 
-  p = cli->buffer;
+    if (size > cli->buf_size) {
+      char *buf = realloc(cli->buffer, size);
+      if (!buf) return;
+      cli->buffer = buf;
+      cli->buf_size = size;
+    }
+
+    memcpy(cli->buffer + len, p, n);
+    free(p);
+    *(cli->buffer + len + n) = 0;
+    p = cli->buffer;
+  }
+  cli->buffer = p;
   do {
     char *next = strchr(p, '\n');
     struct cli_filter *f = (print_mode & PRINT_FILTERED) ? cli->filters : 0;
@@ -1886,7 +1898,7 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
   } while (p);
 
   if (p && *p) {
-    if (p != cli->buffer) memmove(cli->buffer, p, strlen(p));
+    if (p != cli->buffer) memmove(cli->buffer, p, strlen(p) + 1);
   } else
     *cli->buffer = 0;
 }
