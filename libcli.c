@@ -1114,7 +1114,6 @@ int cli_loop(struct cli_def *cli, int sockfd) {
 
   // Set the last action now so we don't time immediately
   if (cli->idle_timeout) time(&cli->last_action);
-  if (cli->regular_callback) time(&cli->last_regular);
 
   // Start off in unprivileged mode
   cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -1187,16 +1186,6 @@ int cli_loop(struct cli_def *cli, int sockfd) {
         cli->showprompt = 0;
       }
 
-      if (cli->regular_callback) {
-        if (time(NULL) - cli->last_regular >= cli->timeout_tm.tv_sec) {
-          if (cli->regular_callback(cli) != CLI_OK) {
-            l = -1;
-            break;
-          }
-          time(&cli->last_regular);
-        }
-      }
-
       if ((sr = cli_socket_wait(sockfd, &tm)) < 0) {
         if (errno == EINTR) continue;
         perror(CLI_SOCKET_WAIT_PERROR);
@@ -1205,6 +1194,12 @@ int cli_loop(struct cli_def *cli, int sockfd) {
       }
 
       if (sr == 0) {
+        // Timeout every second
+        if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK) {
+          l = -1;
+          break;
+        }
+
         if (cli->idle_timeout) {
           if (time(NULL) - cli->last_action >= cli->idle_timeout) {
             if (cli->idle_timeout_callback) {
