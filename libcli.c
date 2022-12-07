@@ -3213,6 +3213,7 @@ static void cli_get_optarg_comphelp(struct cli_def *cli, struct cli_optarg *opta
     if (!(anchor_word && !strncmp(anchor_word, optarg->name, strlen(anchor_word)))) {
       delim_start = DELIM_OPT_START;
       delim_end = DELIM_OPT_END;
+      get_completions = NULL;  // No point, completor of field is the name itself
     }
   } else if (optarg->flags & CLI_CMD_HYPHENATED_OPTION) {
     delim_start = DELIM_OPT_START;
