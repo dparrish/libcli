@@ -15,7 +15,7 @@ REVISION = 7
 LIB = libcli.so
 LIB_STATIC = libcli.a
 
-CC = gcc
+CC = $(CROSS_COMPILE)gcc
 AR = ar
 ARFLAGS = rcs
 DEBUG = -g

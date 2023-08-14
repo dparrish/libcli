@@ -8,8 +8,19 @@ To compile:
 
 ```sh
 $ make
-$ make install
 ```
+
+To cross-compile specify a triplet in variable `CROSS_COMPILE`:
+
+```sh
+$ CROSS_COMPILE=machine-vendor-operatingsystem- make
+````
+
+To install:
+
+```sh
+$ make install
+````
 
 Note - as of version 1.10.5 you have a compile time decision on using select()
 or poll() in cli_loop().  The default is to use the legacy 'select()' call.
