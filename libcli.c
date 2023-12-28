@@ -2515,6 +2515,16 @@ int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *comman
   return cli_int_unregister_command_core(cli, command, CLI_BUILDMODE_COMMAND);
 }
 
+// recoded to find first '\v', otherwise first NULL, instead of using GNU extension strchrnul()
+char *local_strchrnul(const char *src, char target)
+{
+  char *found=NULL;
+  if ((found=strchr(src, target))) {
+    return found;
+  }
+  return strchr(src,'\0');
+}
+
 struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, struct cli_command *parent,
                                                        const char *command,
                                                        int (*callback)(struct cli_def *cli, const char *, char **, int),
@@ -2535,7 +2545,7 @@ struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, stru
   c->command_type = CLI_BUILDMODE_COMMAND;
   c->privilege = privilege;
   c->mode = mode;
-  if (help && !(c->help = strndup(help, strchrnul(help, '\v') - help))) {
+  if (help && !(c->help = strndup(help, local_strchrnul(help, '\v') - help))) {
     free(c->command);
     free(c);
     return NULL;
