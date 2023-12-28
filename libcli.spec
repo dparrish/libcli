@@ -67,6 +67,8 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Dec 17 2023 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Changed from strcasecmp to strcmp in cli_loop() to do case sensitive comparison for <tab> completion (issue #91)
 * Fri Dec 2 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
 - Added regular callback fixes to ensure callback fires every # seconds regardless of input - code provided by github user JereLeppanen initially on 27Apr2022(issue #76)
 * Thu Dec 1 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
