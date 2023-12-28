@@ -1513,7 +1513,7 @@ int cli_loop(struct cli_def *cli, int sockfd) {
               k = 0;
 
             for (j = 0; (j < k) && (j < (int)strlen(wptr)); j++) {
-              if (strncasecmp(tptr + j, wptr + j, 1)) break;
+              if (strncmp(tptr + j, wptr + j, 1)) break;
             }
             k = j;
           }
