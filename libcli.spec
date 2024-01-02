@@ -1,4 +1,4 @@
-Version: 1.10.7
+Version: 1.10.8
 Summary: Cisco-like telnet command-line library
 Name: libcli
 Release: 1
@@ -67,6 +67,23 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Dec 27 2023 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Replace strchrnul() with possibly 2 calls to strchr() (issue #78)
+
+* Sun Dec 17 2023 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Changed from strcasecmp to strcmp in cli_loop() to do case sensitive comparison for <tab> completion (issue #91)
+
+* Fri Dec 2 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Added regular callback fixes to ensure callback fires every # seconds regardless of input - code provided by github user JereLeppanen initially on 27Apr2022(issue #76)
+
+* Thu Dec 1 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Add backward compatibility for LIBCLI versions numbers (issue #85)
+- applied fixes for misspellings on LIBCLI version #defines (issue #75) - fix provided on github by belge-sel on 19Sep2021 
+- Fix for printing (issue #79) where text left in buffer (from call to cli_bufprint for example) is discarded instead of preserved.  Code provided on github by JereLeppanen on 27Apr2021
+
+* Wed Nov 16 2022 Rob Sanders <rsanders@forcepointgov.com> 1.10.8
+- Doxygen headers for libli.c routines - code provided on github by mpzanoosi on 14May2021
+
 * Wed Feb 24 2021 Rob Sanders <rsanders.forcepoint.com> 1.10.7
 - Fix bug were an extra newline was being inserted on every line
   when help was being requested for options and arguments

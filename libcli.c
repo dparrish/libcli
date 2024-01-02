@@ -1114,6 +1114,7 @@ int cli_loop(struct cli_def *cli, int sockfd) {
 
   // Set the last action now so we don't time immediately
   if (cli->idle_timeout) time(&cli->last_action);
+  if (cli->regular_callback) time(&cli->last_regular);
 
   // Start off in unprivileged mode
   cli_set_privilege(cli, PRIVILEGE_UNPRIVILEGED);
@@ -1186,6 +1187,16 @@ int cli_loop(struct cli_def *cli, int sockfd) {
         cli->showprompt = 0;
       }
 
+      if (cli->regular_callback) {
+        if (time(NULL) - cli->last_regular >= cli->timeout_tm.tv_sec) {
+          if (cli->regular_callback(cli) != CLI_OK) {
+            l = -1;
+            break;
+          }
+          time(&cli->last_regular);
+        }
+      }
+
       if ((sr = cli_socket_wait(sockfd, &tm)) < 0) {
         if (errno == EINTR) continue;
         perror(CLI_SOCKET_WAIT_PERROR);
@@ -1194,12 +1205,6 @@ int cli_loop(struct cli_def *cli, int sockfd) {
       }
 
       if (sr == 0) {
-        // Timeout every second
-        if (cli->regular_callback && cli->regular_callback(cli) != CLI_OK) {
-          l = -1;
-          break;
-        }
-
         if (cli->idle_timeout) {
           if (time(NULL) - cli->last_action >= cli->idle_timeout) {
             if (cli->idle_timeout_callback) {
@@ -1508,7 +1513,7 @@ int cli_loop(struct cli_def *cli, int sockfd) {
               k = 0;
 
             for (j = 0; (j < k) && (j < (int)strlen(wptr)); j++) {
-              if (strncasecmp(tptr + j, wptr + j, 1)) break;
+              if (strncmp(tptr + j, wptr + j, 1)) break;
             }
             k = j;
           }
@@ -1856,11 +1861,23 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
 
   n = vasprintf(&p, format, ap);
   if (n < 0) return;
-  if (cli->buffer) free(cli->buffer);
-  cli->buffer = p;
-  cli->buf_size = n;
+  if (cli->buffer) {
+    int len = strlen(cli->buffer);
+    unsigned size = len + n + 1;
 
-  p = cli->buffer;
+    if (size > cli->buf_size) {
+      char *buf = realloc(cli->buffer, size);
+      if (!buf) return;
+      cli->buffer = buf;
+      cli->buf_size = size;
+    }
+
+    memcpy(cli->buffer + len, p, n);
+    free(p);
+    *(cli->buffer + len + n) = 0;
+    p = cli->buffer;
+  }
+  cli->buffer = p;
   do {
     char *next = strchr(p, '\n');
     struct cli_filter *f = (print_mode & PRINT_FILTERED) ? cli->filters : 0;
@@ -1886,7 +1903,7 @@ static void _print(struct cli_def *cli, int print_mode, const char *format, va_l
   } while (p);
 
   if (p && *p) {
-    if (p != cli->buffer) memmove(cli->buffer, p, strlen(p));
+    if (p != cli->buffer) memmove(cli->buffer, p, strlen(p) + 1);
   } else
     *cli->buffer = 0;
 }
@@ -2498,6 +2515,16 @@ int cli_int_unregister_buildmode_command(struct cli_def *cli, const char *comman
   return cli_int_unregister_command_core(cli, command, CLI_BUILDMODE_COMMAND);
 }
 
+// recoded to find first '\v', otherwise first NULL, instead of using GNU extension strchrnul()
+char *local_strchrnul(const char *src, char target)
+{
+  char *found=NULL;
+  if ((found=strchr(src, target))) {
+    return found;
+  }
+  return strchr(src,'\0');
+}
+
 struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, struct cli_command *parent,
                                                        const char *command,
                                                        int (*callback)(struct cli_def *cli, const char *, char **, int),
@@ -2518,7 +2545,7 @@ struct cli_command *cli_int_register_buildmode_command(struct cli_def *cli, stru
   c->command_type = CLI_BUILDMODE_COMMAND;
   c->privilege = privilege;
   c->mode = mode;
-  if (help && !(c->help = strndup(help, strchrnul(help, '\v') - help))) {
+  if (help && !(c->help = strndup(help, local_strchrnul(help, '\v') - help))) {
     free(c->command);
     free(c);
     return NULL;
@@ -3110,17 +3137,17 @@ int cli_int_execute_pipeline(struct cli_def *cli, struct cli_pipeline *pipeline)
  *  Attempt quick dirty wrapping of helptext taking into account the offset from name, embedded
  *  cr/lf in helptext, and trying to split on last white-text before the right margin.  If there is
  *  no identifiable whitespace to split on, then the split will be done on the last character to fit
- *  that line (currently max line with is 80 characters).  
- *  The firstcolumn width will be a greater of 22 characters or the width of nameptr, which ever is 
+ *  that line (currently max line with is 80 characters).
+ *  The firstcolumn width will be a greater of 22 characters or the width of nameptr, which ever is
  *  greater, and will be offset from the rest of the line by one space.  However, if nameptr is
  *  greater than 22 characters it will be put on a line by itself.  The first column will be formatted
  *  as spaces (22 of em) for all subsequent lines.
 .
  *  This routine assumes any 'indenting' of the nameptr field has already been done, and is solely
- *  concerned about wrapping the combination of nameptr and helpptr to look 'nice'.  
+ *  concerned about wrapping the combination of nameptr and helpptr to look 'nice'.
  */
- 
-#define MAX(a,b) ((a) >(b) ? (a) : (b))
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MAXWIDTHCOL1 22
 
 void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *comphelp) {
@@ -3147,8 +3174,8 @@ void cli_int_wrap_help_line(char *nameptr, char *helpptr, struct cli_comphelp *c
       nameptr = emptystring;
       namewidth = MAXWIDTHCOL1;
     }
-    namewidth = MAX(MAXWIDTHCOL1,strlen(nameptr));
-    availwidth = maxwidth - namewidth -1; // subtract 1 for space separating col1 from rest of line
+    namewidth = MAX(MAXWIDTHCOL1, strlen(nameptr));
+    availwidth = maxwidth - namewidth - 1;  // subtract 1 for space separating col1 from rest of line
     toprint = strlen(helpptr);
     if (toprint > availwidth) {
       toprint = availwidth;
