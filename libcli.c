@@ -1013,6 +1013,47 @@ static void cli_clear_line(int sockfd, char *cmd, int l, int cursor) {
   memset((char *)cmd, 0, l);
 }
 
+// return new cursor position
+static int cli_word_right(char *cmd, int l, int cursor) {
+
+  while (cursor < l && cmd[cursor] == ' ') {
+    cursor++;
+  }
+
+  while (cursor < l && cmd[cursor] != ' ') {
+    cursor++;
+  }
+  return cursor;
+}
+
+static int cli_word_left(char *cmd, int cursor) {
+  // like readline compare char before cursor
+  while (cursor > 0 && cmd[cursor-1] == ' ') {
+    cursor--;
+  }
+
+  while (cursor > 0 && cmd[cursor-1] != ' ') {
+    cursor--;
+  }
+  return cursor;
+}
+
+static int cli_move_cursor(struct cli_def *cli, int sockfd, char *cmd, int l, int cursor, int nc) {
+  while (cursor && cursor > nc) {
+    if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD) {
+      _write(sockfd, "\b", 1);
+    }
+    cursor--;
+  }
+  while (cursor < l && cursor < nc) {
+    if (cli->state != STATE_PASSWORD && cli->state != STATE_ENABLE_PASSWORD) {
+      _write(sockfd, &cmd[cursor], 1);
+    }
+    cursor++;
+  }
+  return cursor;
+}
+
 void cli_reprompt(struct cli_def *cli) {
   if (!cli) return;
   cli->showprompt = 1;
@@ -1067,7 +1108,9 @@ static int show_prompt(struct cli_def *cli, int sockfd) {
 }
 
 int cli_loop(struct cli_def *cli, int sockfd) {
-  int n, l, oldl = 0, is_telnet_option = 0, skip = 0, esc = 0, cursor = 0;
+  int n, l, oldl = 0, is_telnet_option = 0, skip = 0, esc = 0, cursor = 0, nc;
+  char esc_buff[10] = {0};
+  int esc_pos = 0;
   char *cmd = NULL, *oldcmd = 0;
   char *username = NULL, *password = NULL;
 
@@ -1266,7 +1309,16 @@ int cli_loop(struct cli_def *cli, int sockfd) {
 
       // Handle ANSI arrows
       if (esc) {
-        if (esc == '[') {
+        if (esc == '[') { // 0x5b
+
+          // terminate ESC seq
+          if (c >= 0x40 && c <= 0x7E) {
+            esc = 0;
+          }
+          if (c >= 0x30 && c <= 0x3F && esc_pos < (int)sizeof(esc_buff) - 2) {
+            esc_buff[esc_pos++] = c;
+          }
+
           // Remap to readline control codes
           switch (c) {
             case 'A':  // Up
@@ -1278,22 +1330,78 @@ int cli_loop(struct cli_def *cli, int sockfd) {
               break;
 
             case 'C':  // Right
-              c = CTRL('F');
+              if (strcmp(esc_buff, "1;5") == 0) {
+                nc = cli_word_right(cmd, l, cursor);
+                cursor = cli_move_cursor(cli, sockfd, cmd, l, cursor, nc);
+                c = 0;
+              }
+              else {
+                c = CTRL('F');
+              }
               break;
 
             case 'D':  // Left
-              c = CTRL('B');
+              if (strcmp(esc_buff, "1;5") == 0) {
+                nc = cli_word_left(cmd, cursor);
+                cursor = cli_move_cursor(cli, sockfd, cmd, l, cursor, nc);
+                c = 0;
+              }
+              else {
+                c = CTRL('B');
+              }
               break;
+
+            case 'H':  // Home
+              c = CTRL('A');
+              break;
+
+            case 'F':  // End
+              c = CTRL('E');
+              break;
+
+            case '~': {
+              // Delete, do not remap to EOF if l==0
+              if (strcmp(esc_buff, "3") == 0 && l) {
+                c = CTRL('D');
+              }
+              else {
+                c = 0;
+              }
+              break;
+            }
 
             default:
               c = 0;
           }
 
-          esc = 0;
         } else {
-          esc = (c == '[') ? c : 0;
+
+          switch (c) {
+
+            case 'b': // Left by word
+              nc = cli_word_left(cmd, cursor);
+              cursor = cli_move_cursor(cli, sockfd, cmd, l, cursor, nc);
+              break;
+
+            case 'f': // Right by word
+              nc = cli_word_right(cmd, l, cursor);
+              cursor = cli_move_cursor(cli, sockfd, cmd, l, cursor, nc);
+              break;
+
+            case '[':
+              esc = c;
+              continue;
+
+            default:
+              break;
+          }
+          esc = 0;
           continue;
         }
+      }
+      else {
+        memset(esc_buff, 0, sizeof(esc_buff));
+        esc_pos = 0;
       }
 
       if (c == 0) continue;
@@ -1304,7 +1412,7 @@ int cli_loop(struct cli_def *cli, int sockfd) {
         break;
       }
 
-      if (c == 27) {
+      if (c == 27) { // 0x1b ESC
         esc = 1;
         continue;
       }
@@ -1421,7 +1529,26 @@ int cli_loop(struct cli_def *cli, int sockfd) {
       if (c == CTRL('D')) {
         if (cli->state == STATE_PASSWORD || cli->state == STATE_ENABLE_PASSWORD) break;
 
-        if (l) continue;
+        if (l) {
+
+          if (cursor < l) {
+            _write(sockfd, cmd + cursor + 1, l - cursor - 1);
+            _write(sockfd, " ", 1);
+
+            // Move everything one char left
+            memmove(cmd + cursor, cmd + cursor + 1, l - cursor - 1);
+
+            l--;
+
+            // And reposition cursor
+            for (int i = l; i >= cursor; i--) _write(sockfd, "\b", 1);
+
+            // Set former last char to null
+            cmd[l] = 0;
+          }
+
+          continue;
+        }
 
         l = -1;
         break;
