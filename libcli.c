@@ -480,6 +480,9 @@ static void cli_free_command(struct cli_def *cli, struct cli_command *cmd) {
       cmd->next->previous = NULL;
     }
   } else {
+    if (cmd->parent && cmd->parent->children == cmd) {
+      cmd->parent->children = cmd->next;
+    }
     if (cmd->previous) {
       cmd->previous->next = cmd->next;
     }

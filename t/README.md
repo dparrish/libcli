@@ -150,7 +150,6 @@ Current known-bug blocks:
 |-------|----------|---------|
 | basic.t "password may contain '?'" | 1544 | `?` swallowed in password states |
 | basic.t "password mid-line edit" | 1358 | cursor moved without compacting buffer |
-| known_bugs.t "unregister child" | 476 | parent `children` dangles (use-after-free) |
 | known_bugs.t "telnet subnegotiation" | 1251 | no SB…SE state machine; payload injected |
 
 ## valgrind mode

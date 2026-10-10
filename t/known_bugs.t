@@ -9,11 +9,13 @@ run_tests();
 
 __DATA__
 
-=== TEST 1: unregistering a child command leaves the parent usable (KNOWN BUG libcli.c:476)
---- SKIP
+=== TEST 1: unregistering a child command leaves the parent usable
 --- fixture: unreg_child
 --- input
 show ?
+show
+--- output_like
+^No callback for "show"$
 --- output_unlike
 counters
 
