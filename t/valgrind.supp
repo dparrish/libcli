@@ -4,16 +4,5 @@
 # still catch NEW ones.  Each entry names the bug it hides; remove the
 # entry as part of the fix so the exercising test turns into live leak
 # coverage.
-
-# KNOWN BUG: cli_done() does not free cli->enable_password, which
-# cli_allow_enable() strdup's at libcli.c:270.  Leaked on every cli that
-# sets a static enable password.
-{
-   cli_done-leaks-enable_password
-   Memcheck:Leak
-   match-leak-kinds: definite
-   fun:malloc
-   fun:strdup
-   fun:cli_allow_enable
-   fun:main
-}
+#
+# There are currently no known leaks.

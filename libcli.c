@@ -745,6 +745,7 @@ int cli_done(struct cli_def *cli) {
   free_z(cli->banner);
   free_z(cli->promptchar);
   free_z(cli->hostname);
+  free_z(cli->enable_password);
   free_z(cli->buffer);
   free_z(cli);
 

@@ -167,9 +167,8 @@ scaled up automatically because Memcheck is ~20–30x slower.
 `t/valgrind.supp` baselines known pre-existing leaks so the gate still
 fails on *new* ones. Each suppression names the bug it hides; remove the
 suppression as part of the fix so the exercising test turns into live
-leak coverage. It currently suppresses one leak: `cli_done()` does not
-free `cli->enable_password` (allocated in `cli_allow_enable`,
-libcli.c:270).
+leak coverage. There are currently no known leaks, so the file holds no
+suppressions.
 
 ## CI
 
