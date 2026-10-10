@@ -995,6 +995,12 @@ out:
   cli_int_free_pipeline(pipeline);
 }
 
+// Return the index where the word ending at position l starts
+static int cli_int_word_start(const char *cmd, int l, int comma_separated) {
+  while (l > 0 && cmd[l - 1] != ' ' && cmd[l - 1] != '|' && !(comma_separated && cmd[l - 1] == ',')) l--;
+  return l;
+}
+
 static void cli_clear_line(int sockfd, char *cmd, int l, int cursor) {
   // Use cmd as our buffer, and overwrite contents as needed.
   // Backspace to beginning
@@ -1465,18 +1471,24 @@ int cli_loop(struct cli_def *cli, int sockfd) {
         } else if (comphelp.num_entries == 1) {
           // Single completion - show *unless* the optional/required 'prefix' is present
           if (comphelp.entries[0][0] != '[' && comphelp.entries[0][0] != '<') {
-            for (; l > 0; l--, cursor--) {
-              if (cmd[l - 1] == ' ' || cmd[l - 1] == '|' || (comphelp.comma_separated && cmd[l - 1] == ',')) break;
-              _write(sockfd, "\b", 1);
+            int start = cli_int_word_start(cmd, l, comphelp.comma_separated);
+            int len = strlen(comphelp.entries[0]);
+
+            // The completed word and its trailing space must fit, leaving room for the terminating NUL
+            if (start + len + 1 >= CLI_MAX_LINE_LENGTH) {
+              _write(sockfd, "\a", 1);
+            } else {
+              for (; l > start; l--, cursor--) _write(sockfd, "\b", 1);
+              memcpy(cmd + l, comphelp.entries[0], len);
+              l += len;
+              cmd[l++] = ' ';
+              cmd[l] = 0;
+              cursor = l;
+              _write(sockfd, comphelp.entries[0], len);
+              _write(sockfd, " ", 1);
+              // And now forget the tab, since we just found a single match
+              lastchar = '\0';
             }
-            strcpy((cmd + l), comphelp.entries[0]);
-            l += strlen(comphelp.entries[0]);
-            cmd[l++] = ' ';
-            cursor = l;
-            _write(sockfd, comphelp.entries[0], strlen(comphelp.entries[0]));
-            _write(sockfd, " ", 1);
-            // And now forget the tab, since we just found a single match
-            lastchar = '\0';
           } else {
             // Yes, we had a match, but it wasn't required - remember the tab in case the user double tabs....
             lastchar = CTRL('I');
@@ -1518,14 +1530,14 @@ int cli_loop(struct cli_def *cli, int sockfd) {
             k = j;
           }
 
-          // Try to show minimum match string if we have a non-zero k and the first letter of the last word is not '['.
-          if (k && comphelp.entries[comphelp.num_entries - 1][0] != '[') {
-            for (; l > 0; l--, cursor--) {
-              if (cmd[l - 1] == ' ' || cmd[l - 1] == '|' || (comphelp.comma_separated && cmd[l - 1] == ',')) break;
-              _write(sockfd, "\b", 1);
-            }
-            strncpy(cmd + l, tptr, k);
+          // Try to show minimum match string if we have a non-zero k and the first letter of the last word is not '[',
+          // and the result fits in the buffer with room for the terminating NUL.
+          int start = cli_int_word_start(cmd, l, comphelp.comma_separated);
+          if (k && comphelp.entries[comphelp.num_entries - 1][0] != '[' && start + k < CLI_MAX_LINE_LENGTH) {
+            for (; l > start; l--, cursor--) _write(sockfd, "\b", 1);
+            memcpy(cmd + l, tptr, k);
             l += k;
+            cmd[l] = 0;
             cursor = l;
             _write(sockfd, tptr, k);
 

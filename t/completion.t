@@ -82,15 +82,25 @@ paint ?
 
 
 
-=== TEST 9: Tab completion near the line-length limit does not overflow (KNOWN BUG libcli.c:1472)
---- SKIP
+=== TEST 9: Tab completion past the line-length limit rings the bell, no overflow
 --- fixture: completion
 --- input eval
-"neighbor" . (" " x 4080) . "<TAB>\n"
+"neighbor" . (" " x 4074) . "<TAB>\n"
+--- output_unlike
+^RAN neighbor advertisement$
 
 
 
-=== TEST 10: a failed buildmode entry does not crash the cli
+=== TEST 10: Tab completion that exactly fits the line-length limit still completes
+--- fixture: completion
+--- input eval
+"neighbor" . (" " x 4073) . "<TAB>\n"
+--- output_like
+^RAN neighbor advertisement$
+
+
+
+=== TEST 11: a failed buildmode entry does not crash the cli
 --- fixture: buildmode
 --- input
 build go
