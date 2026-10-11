@@ -34,6 +34,7 @@ Requires Perl with `Test::Base` (Debian/Ubuntu: `libtest-base-perl`).
       lib/Test/LibCLI.pm the harness: forks the driver, feeds input, checks output
       valgrind.supp      baseline suppressions for known, pre-existing leaks
       basic.t            commands, auth, enable, config mode, history
+      auth.t             cli-aware auth/enable callbacks, cli_read_password()
       editing.t          line-editing keys (ctrl-a/e/b/f/k/w/u/z, backspace, insert)
       filters.t          include/exclude/count/begin/between/grep/egrep
       completion.t       tab and '?' completion, validators
@@ -122,6 +123,7 @@ Fixtures currently available (`--- fixture:`):
 | `dupoptarg` | registers a duplicate optarg, then exercises the command |
 | `buildmode` | a build-mode command whose optarg name collides with a reserved one |
 | `unreg_child` | registers `show counters`, then unregisters the child |
+| `auth_ctx` | login and enable through the cli-aware callbacks; `secret` and `short` read hidden input |
 
 ### Adding a fixture
 

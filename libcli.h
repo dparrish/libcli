@@ -91,6 +91,8 @@ struct cli_def {
   int disallow_buildmode;
   struct cli_pipeline *pipeline;
   struct cli_buildmode *buildmode;
+  int (*auth_callback_ctx)(struct cli_def *cli, const char *username, const char *password);
+  int (*enable_callback_ctx)(struct cli_def *cli, const char *password);
 };
 
 struct cli_filter {
@@ -335,6 +337,56 @@ void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(const char 
  * @see        cli_set_auth_callback, auth_callback
  */
 void cli_set_enable_callback(struct cli_def *cli, int (*enable_callback)(const char *));
+
+/**
+ * @brief      like cli_set_auth_callback(), but the callback also gets the cli,
+ *             so it can reach cli_get_context() and print with cli_print()
+ *
+ * @note       the callback returns CLI_OK to accept the login, CLI_QUIT to end
+ *             the session (e.g. after too many failures), or anything else to
+ *             deny it and prompt for the username again; the buffers holding
+ *             the username and password are wiped after the call, so the
+ *             callback must copy what it wants to keep
+ *
+ * @param      cli            target cli object
+ * @param[in]  auth_callback  username/password checker, or NULL to remove it
+ */
+void cli_set_auth_callback_ctx(struct cli_def *cli,
+                               int (*auth_callback)(struct cli_def *cli, const char *username, const char *password));
+
+/**
+ * @brief      like cli_set_enable_callback(), but the callback also gets the
+ *             cli
+ *
+ * @note       the callback returns CLI_OK to enter privileged mode, CLI_QUIT to
+ *             end the session, or anything else to deny it; unlike the
+ *             callback of cli_set_enable_callback(), CLI_OK (0) means success
+ *
+ * @param      cli              target cli object
+ * @param[in]  enable_callback  enable password checker, or NULL to remove it
+ */
+void cli_set_enable_callback_ctx(struct cli_def *cli, int (*enable_callback)(struct cli_def *cli, const char *password));
+
+/**
+ * @brief      reads a line without echoing it, from inside a command callback
+ *             running under cli_loop(); for asking a password, e.g. "username
+ *             bob secret"; the line never enters the history
+ *
+ * @note       backspace deletes a character, ctrl-u clears the line, ctrl-c
+ *             cancels; telnet option negotiation is skipped; the idle timeout
+ *             of cli_set_idle_timeout() applies, without its callback
+ *
+ * @param      cli     target cli object
+ * @param[in]  prompt  text written first, e.g. "Password: "
+ * @param[out] buf     receives the line, NUL-terminated
+ * @param[in]  size    size of buf, at least 1
+ *
+ * @return     CLI_OK with the line in buf; CLI_ERROR if cancelled with ctrl-c,
+ *             too long for buf, or not under cli_loop(); CLI_QUIT if the
+ *             connection closed or timed out, and the command should return
+ *             CLI_QUIT; buf is wiped on any error
+ */
+int cli_read_password(struct cli_def *cli, const char *prompt, char *buf, size_t size);
 
 /**
  * @brief      function to add a username/password pair; this is a dynamic

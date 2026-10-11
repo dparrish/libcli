@@ -18,6 +18,7 @@
 
 #include "libcli.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,14 @@ static int drv_fixture_validate(struct cli_def *cli);
 static int drv_fixture_dupoptarg(struct cli_def *cli);
 static int drv_fixture_buildmode(struct cli_def *cli);
 static int drv_fixture_unreg_child(struct cli_def *cli);
+static int drv_fixture_auth_ctx(struct cli_def *cli);
+static int drv_auth_ctx(struct cli_def *cli, const char *username,
+    const char *password);
+static int drv_enable_ctx(struct cli_def *cli, const char *password);
+static int drv_cmd_secret(struct cli_def *cli, const char *command,
+    char *argv[], int argc);
+static int drv_cmd_short(struct cli_def *cli, const char *command,
+    char *argv[], int argc);
 static int drv_validate_color(struct cli_def *cli, const char *name,
     const char *value);
 static const drv_fixture_t *drv_find_fixture(const char *name);
@@ -61,6 +70,7 @@ static const drv_fixture_t  drv_fixtures[] = {
     { "dupoptarg", drv_fixture_dupoptarg },
     { "buildmode", drv_fixture_buildmode },
     { "unreg_child", drv_fixture_unreg_child },
+    { "auth_ctx", drv_fixture_auth_ctx },
     { NULL, NULL }
 };
 
@@ -436,6 +446,131 @@ drv_fixture_unreg_child(struct cli_def *cli)
     }
 
     cli_unregister_all(cli, counters);
+
+    return CLI_OK;
+}
+
+
+/*
+ * auth_ctx: login and enable go through the cli-aware callbacks, and two
+ * commands read hidden input with cli_read_password().
+ *
+ *     login   alice/pw1 is accepted; the third failure ends the session
+ *     enable  "en" is accepted, "bye" ends the session
+ *     secret  reads a password and its confirmation, prints both
+ *             upper-cased (so an echo of the typed text would show)
+ *     short   reads into a 4-byte buffer
+ */
+static int  drv_auth_failures;
+
+
+static int
+drv_fixture_auth_ctx(struct cli_def *cli)
+{
+    cli_set_auth_callback_ctx(cli, drv_auth_ctx);
+    cli_set_enable_callback_ctx(cli, drv_enable_ctx);
+    cli_set_context(cli, &drv_auth_failures);
+
+    if (cli_register_command(cli, NULL, "secret", drv_cmd_secret,
+                             PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                             "Read a password twice") == NULL
+        || cli_register_command(cli, NULL, "short", drv_cmd_short,
+                                PRIVILEGE_UNPRIVILEGED, MODE_EXEC,
+                                "Read into a small buffer") == NULL
+        || cli_register_command(cli, NULL, "reload", drv_cmd_print,
+                                PRIVILEGE_PRIVILEGED, MODE_EXEC,
+                                "Reload the system") == NULL)
+    {
+        return CLI_ERROR;
+    }
+
+    return CLI_OK;
+}
+
+
+static int
+drv_auth_ctx(struct cli_def *cli, const char *username, const char *password)
+{
+    int  *failures;
+
+    failures = cli_get_context(cli);
+
+    if (strcmp(username, "alice") == 0 && strcmp(password, "pw1") == 0) {
+        cli_print(cli, "AUTH %s", username);
+        return CLI_OK;
+    }
+
+    if (++*failures >= 3) {
+        cli_print(cli, "TOO MANY FAILURES");
+        return CLI_QUIT;
+    }
+
+    return CLI_ERROR;
+}
+
+
+static int
+drv_enable_ctx(struct cli_def *cli, const char *password)
+{
+    if (strcmp(password, "en") == 0) {
+        cli_print(cli, "ENABLE OK");
+        return CLI_OK;
+    }
+
+    if (strcmp(password, "bye") == 0) {
+        cli_print(cli, "ENABLE QUIT");
+        return CLI_QUIT;
+    }
+
+    return CLI_ERROR;
+}
+
+
+static int
+drv_cmd_secret(struct cli_def *cli, const char *command, char *argv[],
+    int argc)
+{
+    int     rc1, rc2;
+    char   *p;
+    char    a[64], b[64];
+
+    rc1 = cli_read_password(cli, "New password: ", a, sizeof(a));
+    cli_print(cli, "RC1 %d", rc1);
+
+    if (rc1 != CLI_OK) {
+        return rc1 == CLI_QUIT ? CLI_QUIT : CLI_OK;
+    }
+
+    rc2 = cli_read_password(cli, "Confirm password: ", b, sizeof(b));
+    cli_print(cli, "RC2 %d", rc2);
+
+    if (rc2 != CLI_OK) {
+        return rc2 == CLI_QUIT ? CLI_QUIT : CLI_OK;
+    }
+
+    for (p = a; *p; p++) {
+        *p = toupper((unsigned char) *p);
+    }
+
+    for (p = b; *p; p++) {
+        *p = toupper((unsigned char) *p);
+    }
+
+    cli_print(cli, "GOT [%s] [%s]", a, b);
+
+    return CLI_OK;
+}
+
+
+static int
+drv_cmd_short(struct cli_def *cli, const char *command, char *argv[],
+    int argc)
+{
+    int   rc;
+    char  buf[4];
+
+    rc = cli_read_password(cli, "Password: ", buf, sizeof(buf));
+    cli_print(cli, "RC %d LEN %d", rc, (int) strlen(buf));
 
     return CLI_OK;
 }

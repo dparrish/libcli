@@ -134,6 +134,23 @@ struct cli_filter_cmds {
     }             \
   } while (0)
 
+// memset through a volatile pointer, so the compiler cannot drop it before a free()
+static void *(*const volatile cli_wipe_memset)(void *, int, size_t) = memset;
+
+static void cli_wipe(void *p, size_t n) {
+  if (p) cli_wipe_memset(p, 0, n);
+}
+
+// Wipe a string, then free and zero it
+#define free_wipe(p)                  \
+  do {                                \
+    if (p) {                          \
+      cli_wipe((p), strlen(p));       \
+      free(p);                        \
+      (p) = 0;                        \
+    }                                 \
+  } while (0)
+
 // Forward defines of *INTERNAL* library function as static here
 static int cli_search_flags_validator(struct cli_def *cli, const char *word, const char *value);
 static int cli_match_filter_init(struct cli_def *cli, int argc, char **argv, struct cli_filter *filt);
@@ -235,6 +252,15 @@ void cli_set_auth_callback(struct cli_def *cli, int (*auth_callback)(const char 
 
 void cli_set_enable_callback(struct cli_def *cli, int (*enable_callback)(const char *)) {
   cli->enable_callback = enable_callback;
+}
+
+void cli_set_auth_callback_ctx(struct cli_def *cli,
+                               int (*auth_callback)(struct cli_def *cli, const char *username, const char *password)) {
+  cli->auth_callback_ctx = auth_callback;
+}
+
+void cli_set_enable_callback_ctx(struct cli_def *cli, int (*enable_callback)(struct cli_def *cli, const char *password)) {
+  cli->enable_callback_ctx = enable_callback;
 }
 
 void cli_allow_user(struct cli_def *cli, const char *username, const char *password) {
@@ -532,7 +558,7 @@ int cli_show_help(struct cli_def *cli, struct cli_command *c) {
 int cli_enable(struct cli_def *cli, UNUSED(const char *command), UNUSED(char *argv[]), UNUSED(int argc)) {
   if (cli->privilege == PRIVILEGE_PRIVILEGED) return CLI_OK;
 
-  if (!cli->enable_password && !cli->enable_callback) {
+  if (!cli->enable_password && !cli->enable_callback && !cli->enable_callback_ctx) {
     // No password required, set privilege immediately.
     cli_set_privilege(cli, PRIVILEGE_PRIVILEGED);
     cli_set_configmode(cli, MODE_EXEC, NULL);
@@ -745,7 +771,7 @@ int cli_done(struct cli_def *cli) {
   free_z(cli->banner);
   free_z(cli->promptchar);
   free_z(cli->hostname);
-  free_z(cli->enable_password);
+  free_wipe(cli->enable_password);
   free_z(cli->buffer);
   free_z(cli);
 
@@ -1131,7 +1157,7 @@ int cli_loop(struct cli_def *cli, int sockfd) {
   cli_set_configmode(cli, MODE_EXEC, NULL);
 
   // No auth required?
-  if (!cli->users && !cli->auth_callback) cli->state = STATE_NORMAL;
+  if (!cli->users && !cli->auth_callback && !cli->auth_callback_ctx) cli->state = STATE_NORMAL;
 
   while (1) {
     signed int in_history = 0;
@@ -1732,18 +1758,34 @@ int cli_loop(struct cli_def *cli, int sockfd) {
 
       // Require login
       free_z(username);
-      if (!(username = strdup(cmd))) return 0;
+      if (!(username = strdup(cmd))) break;
       cli->state = STATE_PASSWORD;
       cli->showprompt = 1;
     } else if (cli->state == STATE_PASSWORD) {
       // Require password
-      int allowed = 0;
+      int allowed = 0, quit = 0;
 
-      free_z(password);
-      if (!(password = strdup(cmd))) return 0;
+      free_wipe(password);
+      if (!(password = strdup(cmd))) break;
+      cli_wipe(cmd, l);
       if (cli->auth_callback) {
         if (cli->auth_callback(username, password) == CLI_OK) allowed++;
       }
+
+      if (!allowed && cli->auth_callback_ctx) {
+        // The Enter after a password is not echoed; end the line so the callback's messages start on their own
+        _write(sockfd, "\r\n", 2);
+        switch (cli->auth_callback_ctx(cli, username, password)) {
+          case CLI_OK:
+            allowed++;
+            break;
+          case CLI_QUIT:
+            quit++;
+            break;
+        }
+      }
+
+      if (quit) break;
 
       if (!allowed) {
         struct unp *u;
@@ -1755,19 +1797,19 @@ int cli_loop(struct cli_def *cli, int sockfd) {
         }
       }
 
+      free_wipe(password);
       if (allowed) {
         cli_error(cli, " ");
         cli->state = STATE_NORMAL;
       } else {
         cli_error(cli, "\n\nAccess denied");
-        free_z(username);
-        free_z(password);
+        free_wipe(username);
         cli->state = STATE_LOGIN;
       }
 
       cli->showprompt = 1;
     } else if (cli->state == STATE_ENABLE_PASSWORD) {
-      int allowed = 0;
+      int allowed = 0, quit = 0;
       if (cli->enable_password) {
         // Check stored static enable password
         if (pass_matches(cli->enable_password, cmd)) allowed++;
@@ -1777,6 +1819,21 @@ int cli_loop(struct cli_def *cli, int sockfd) {
         // Check callback
         if (cli->enable_callback(cmd)) allowed++;
       }
+
+      if (!allowed && cli->enable_callback_ctx) {
+        _write(sockfd, "\r\n", 2);
+        switch (cli->enable_callback_ctx(cli, cmd)) {
+          case CLI_OK:
+            allowed++;
+            break;
+          case CLI_QUIT:
+            quit++;
+            break;
+        }
+      }
+
+      cli_wipe(cmd, l);
+      if (quit) break;
 
       if (allowed) {
         cli->state = STATE_ENABLE;
@@ -1824,13 +1881,105 @@ int cli_loop(struct cli_def *cli, int sockfd) {
   }
 
   cli_free_history(cli);
-  free_z(username);
-  free_z(password);
+  free_wipe(username);
+  free_wipe(password);
+  cli_wipe(cmd, CLI_MAX_LINE_LENGTH);
   free_z(cmd);
 
   fclose(cli->client);
   cli->client = 0;
   return CLI_OK;
+}
+
+int cli_read_password(struct cli_def *cli, const char *prompt, char *buf, size_t size) {
+  int sockfd, telnet_option = 0, too_long = 0, rc = CLI_QUIT;
+  size_t l = 0;
+  unsigned char c;
+  struct timeval tm;
+
+  if (!cli->client || !buf || size < 1) return CLI_ERROR;
+  sockfd = fileno(cli->client);
+  buf[0] = 0;
+  if (prompt) _write(sockfd, prompt, strlen(prompt));
+
+  while (1) {
+    int sr;
+    ssize_t n;
+
+    tm.tv_sec = 1;
+    tm.tv_usec = 0;
+    if ((sr = cli_socket_wait(sockfd, &tm)) < 0) {
+      if (errno == EINTR) continue;
+      break;
+    }
+
+    if (sr == 0) {
+      if (cli->idle_timeout && time(NULL) - cli->last_action >= cli->idle_timeout) break;
+      continue;
+    }
+
+    if ((n = read(sockfd, &c, 1)) < 0) {
+      if (errno == EINTR) continue;
+      break;
+    }
+
+    if (n == 0) break;
+    if (cli->idle_timeout) time(&cli->last_action);
+
+    // Telnet: IAC, then a WILL/WONT/DO/DONT and its option byte; IAC IAC is a literal 255
+    if (telnet_option) {
+      if (telnet_option == 255 && c >= 251 && c <= 254) {
+        telnet_option = c;
+        continue;
+      }
+
+      telnet_option = 0;
+      if (c != 255) continue;
+    } else if (c == 255) {
+      telnet_option = 255;
+      continue;
+    }
+
+    // A line ends with \r; the \n or \0 after it, left over from the command line too, is dropped
+    if (c == 0 || c == '\n') continue;
+
+    if (c == '\r') {
+      rc = too_long ? CLI_ERROR : CLI_OK;
+      break;
+    }
+
+    if (c == CTRL('C')) {
+      rc = CLI_ERROR;
+      break;
+    }
+
+    if (c == CTRL('H') || c == 0x7f) {
+      if (l > 0) buf[--l] = 0;
+      continue;
+    }
+
+    if (c == CTRL('U')) {
+      cli_wipe(buf, l);
+      l = 0;
+      continue;
+    }
+
+    if (c < ' ') continue;
+
+    if (l + 1 >= size) {
+      // Too long: read on to the end of the line, then fail
+      too_long = 1;
+      continue;
+    }
+
+    buf[l++] = c;
+    buf[l] = 0;
+  }
+
+  _write(sockfd, "\r\n", 2);
+  if (rc != CLI_OK) cli_wipe(buf, size);
+
+  return rc;
 }
 
 int cli_file(struct cli_def *cli, FILE *fh, int privilege, int mode) {

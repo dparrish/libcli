@@ -79,6 +79,20 @@ return `CLI_OK` if the user is to have access and `CLI_ERROR` if they are not.
 
 The library itself will take care of prompting the user for credentials.
 
+In a threaded server, where the callback needs to know which session it is
+checking, use `cli_set_auth_callback_ctx(cli, callback)` instead. Its callback
+also gets the `cli_def`, so it can reach `cli_get_context()` and print with
+`cli_print()`. It returns `CLI_OK` to accept, `CLI_QUIT` to end the session
+(e.g. after too many failures), or anything else to deny.
+`cli_set_enable_callback_ctx(cli, callback)` does the same for `enable`.
+The buffers holding typed passwords are wiped after use.
+
+A command can ask for a password itself, e.g. `username bob secret`, with
+`cli_read_password(cli, prompt, buf, size)`. The line is not echoed and never
+enters the history; ctrl-c cancels it. It returns `CLI_OK`, `CLI_ERROR`
+(cancelled or too long), or `CLI_QUIT` (connection closed or idle timeout),
+which the command should return.
+
 Commands are built using a tree-like structure. You define commands with the
 `cli_register_command(parent, command, callback, privilege, mode, help)` function.
 
